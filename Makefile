@@ -6,6 +6,9 @@ IMAGE_3ds := devkitpro/devkitarm:latest
 
 CONSOLES := n64 ogc nds 3ds
 
+# Stop Git Bash on Windows rewriting the container paths (/src/...) into Windows paths.
+export MSYS_NO_PATHCONV := 1
+
 all: test pc $(CONSOLES)
 
 test:

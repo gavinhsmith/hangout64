@@ -13,16 +13,19 @@ TARGET  := hangout64
 BUILD   := build
 OBJS    := $(BUILD)/main.o $(BUILD)/cube.o
 ARCH    := -march=armv5te -mtune=arm946e-s
-CFLAGS  := -O2 -Wall $(ARCH) -DARM9 -I$(LIBNDS)/include -I../core
-LDFLAGS := -specs=ds_arm9.specs $(ARCH)
-LIBS    := -L$(LIBNDS)/lib -lnds9 -lm
+CFLAGS  := -O2 -Wall $(ARCH) -DARM9 $(_EXTRADEFS) -I$(LIBNDS)/include -I../core
+# ds_rules' %.elf rule links these, adding calico's specs and runtime.
+LD       := $(CC)
+OFILES   := $(OBJS)
+LDFLAGS  := -specs=ds_arm9.specs $(ARCH)
+LIBPATHS := -L$(LIBNDS)/lib
+LIBS     := -lnds9 -lm
 
 all: $(TARGET).nds
 
 $(TARGET).nds: $(TARGET).elf
 
 $(TARGET).elf: $(OBJS)
-	$(CC) $(LDFLAGS) $^ $(LIBS) -o $@
 
 $(BUILD)/%.o: %.c | $(BUILD)
 	$(CC) $(CFLAGS) -c $< -o $@
@@ -34,6 +37,6 @@ $(BUILD):
 	mkdir -p $@
 
 clean:
-	rm -rf $(BUILD) *.elf *.nds
+	rm -rf $(BUILD) *.elf *.nds *.lst
 
 .PHONY: all clean

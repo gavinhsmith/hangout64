@@ -7,17 +7,34 @@
 #endif
 #include "world.h"
 
+/* gu.h maps guMtx* to libogc's paired-single (ps_) routines on GEKKO. Those corrupted the
+ * Wii build's model matrices (the avatar and mesh parts exploded; which build broke depended
+ * on unrelated code, i.e. on register allocation), so use the plain C versions: a handful
+ * of matrices a frame doesn't need the speed. */
+#undef guMtxConcat
+#define guMtxConcat c_guMtxConcat
+#undef guMtxTrans
+#define guMtxTrans c_guMtxTrans
+#undef guMtxTransApply
+#define guMtxTransApply c_guMtxTransApply
+#undef guMtxIdentity
+#define guMtxIdentity c_guMtxIdentity
+#undef guMtxRotRad
+#define guMtxRotRad c_guMtxRotRad
+
 #define FIFO_SIZE (256 * 1024)
 
 static place pl; /* the loaded place; mesh parts are drawn from it */
-static GXTexObj gpu_textures[PLACE_MAX_TEXTURES + 1]; /* by texture slot */
+static GXTexObj gpu_textures[MAX_PLAYERS + PLACE_MAX_TEXTURES]; /* by texture slot */
 
 /* Expand each 16-colour place texture to RGB565 in GX's tiled layout (4x4-pixel tiles,
  * 32 bytes each, row-major) and set it up nearest-filtered. */
 static void upload_textures(void)
 {
-    texture *all[PLACE_MAX_TEXTURES + 1] = {&guy_texture}; /* the avatar's, then the place's */
-    int count = 1;
+    texture *all[MAX_PLAYERS + PLACE_MAX_TEXTURES]; /* the avatars', then the place's */
+    int count = 0;
+    for (int i = 0; i < MAX_PLAYERS; i++)
+        all[count++] = &avatar_textures[i];
     for (int i = 0; i < pl.texture_count; i++)
         all[count++] = &pl.textures[i];
     for (int i = 0; i < count; i++) {
@@ -188,7 +205,7 @@ static void draw_scene(const world *w, const view *v)
         guMtxRotDeg(ry, 'y', p->heading / 10.0f);
         guMtxTransApply(ry, model, p->x / 1000.0f, FLOOR_Y + p->y / 1000.0f, p->z / 1000.0f);
         guMtxConcat(view, model, mv);
-        draw_mesh(&guy_mesh, mv);
+        draw_mesh(&avatar_meshes[i], mv);
     }
 }
 

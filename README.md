@@ -68,12 +68,14 @@ power of two if needed; they are drawn nearest-filtered and tinted by the model'
 (`pip install pillow`).
 
 Engine assets (like the avatar) are compiled in instead, with `tools/obj2c.py`. The avatar's
-texture is the atlas `assets/texture/guy.png`; `tools/guy_uvs.py` maps it onto the model
-(re-run it after re-exporting `guy.obj`, which drops the UVs):
+texture is the atlas `assets/texture/guy_base.png` with `guy_coat.png` layered on top; the
+coat's greys are tinted with each player's coat colour at runtime by swapping palette
+entries. `tools/guy_uvs.py` maps the atlas onto the model (re-run it after re-exporting
+`guy.obj`, which drops the UVs):
 
 ```sh
 python3 tools/guy_uvs.py assets/model/guy.obj
-python3 tools/obj2c.py assets/model/guy.obj guy_mesh 255,255,255 assets/texture/guy.png guy_texture > core/guy_mesh.c
+python3 tools/obj2c.py assets/model/guy.obj guy_mesh 255,255,255 assets/texture/guy_base.png guy_texture assets/texture/guy_coat.png > core/guy_mesh.c
 ```
 
 Models are OBJ files exported Z-up with the front facing -Y (as from OwlCAD).

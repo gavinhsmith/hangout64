@@ -11,13 +11,15 @@
 #define TICK_MS (1000.0 / 60.0)
 
 static place pl; /* the loaded place; mesh parts are drawn from it */
-static GLuint gpu_textures[PLACE_MAX_TEXTURES + 1]; /* by texture slot */
+static GLuint gpu_textures[MAX_PLAYERS + PLACE_MAX_TEXTURES]; /* by texture slot */
 
 /* Expand each 16-colour place texture to RGB and upload it, nearest-filtered. */
 static void upload_textures(void)
 {
-    texture *all[PLACE_MAX_TEXTURES + 1] = {&guy_texture}; /* the avatar's, then the place's */
-    int count = 1;
+    texture *all[MAX_PLAYERS + PLACE_MAX_TEXTURES]; /* the avatars', then the place's */
+    int count = 0;
+    for (int i = 0; i < MAX_PLAYERS; i++)
+        all[count++] = &avatar_textures[i];
     for (int i = 0; i < pl.texture_count; i++)
         all[count++] = &pl.textures[i];
     static uint8_t rgb[TEXTURE_MAX * TEXTURE_MAX][3];
@@ -112,7 +114,7 @@ static void draw_scene(const world *w, const view *v)
         glPushMatrix();
         glTranslatef(p->x / 1000.0f, FLOOR_Y + p->y / 1000.0f, p->z / 1000.0f);
         glRotatef(p->heading / 10.0f, 0.0f, 1.0f, 0.0f);
-        draw_mesh(&guy_mesh);
+        draw_mesh(&avatar_meshes[i]);
         glPopMatrix();
     }
 }

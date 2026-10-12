@@ -66,8 +66,30 @@ static void build_level_mesh(void)
     level_mesh.tris = t;
 }
 
+texture avatar_textures[MAX_PLAYERS];
+mesh avatar_meshes[MAX_PLAYERS];
+
+/* The lightest grey of the coat becomes the coat colour exactly, darker greys darker in
+ * proportion, so the coat keeps its shading. */
+void avatar_build(int i, const uint8_t coat[3])
+{
+    texture *t = &avatar_textures[i];
+    *t = guy_texture;
+    int light = 1;
+    for (int c = guy_texture_coat_first; c < 16; c++)
+        light = guy_texture.palette[c][0] > light ? guy_texture.palette[c][0] : light;
+    for (int c = guy_texture_coat_first; c < 16; c++)
+        for (int a = 0; a < 3; a++)
+            t->palette[c][a] = coat[a] * guy_texture.palette[c][0] / light;
+    avatar_meshes[i] = guy_mesh;
+    avatar_meshes[i].texture = t;
+}
+
 world world_init(const place *pl, int players)
 {
+    static const uint8_t coats[MAX_PLAYERS][3] = {
+        {196, 40, 28}, {13, 105, 172}, {75, 151, 75}, {245, 205, 48}, /* red, blue, green, yellow */
+    };
     level = pl;
     build_level_mesh();
     world w = {0};
@@ -75,6 +97,11 @@ world world_init(const place *pl, int players)
     for (int i = 0; i < players; i++) {
         w.players[i].x = i * 1500; /* side by side, standing on the floor */
         w.players[i].on_ground = 1;
+    }
+    for (int i = 0; i < MAX_PLAYERS; i++) {
+        for (int a = 0; a < 3; a++)
+            w.players[i].coat[a] = coats[i][a];
+        avatar_build(i, coats[i]);
     }
     return w;
 }

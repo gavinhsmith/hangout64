@@ -42,7 +42,7 @@ def milli(v):
 
 
 def pack_texture(path):
-    w, h, palette, pixels, su, sv = load_texture(path)
+    w, h, palette, pixels, su, sv, _ = load_texture(path)
     data = struct.pack('<BBxx', w.bit_length() - 1, h.bit_length() - 1)
     data += b''.join(struct.pack('BBB', *c) for c in palette)
     return chunk(b'TEXR', data + pixels), (su, sv)

@@ -42,7 +42,8 @@ typedef struct {
 #define FLOOR_Y -1     /* where the floor is drawn; game heights are measured from it */
 
 extern const mesh guy_mesh; /* feet at y = 0, facing -Z; see tools/obj2c.py */
-extern texture guy_texture;
+extern texture guy_texture;      /* its atlas, coat in grey: palette entries guy_texture_coat_first..15 */
+extern const int guy_texture_coat_first;
 extern mesh level_mesh;      /* floor + box parts of the current place, built by world_init() */
 
 /* Lengths are in thousandths of a unit, angles in tenths of a degree. Heights (y) are
@@ -111,6 +112,7 @@ typedef struct {
     int on_ground;
     int heading;   /* 0..3599; 0 faces -Z, turns toward where it moves */
     int target_heading;
+    uint8_t coat[3];
 } player;
 
 #define MAX_PLAYERS 4
@@ -122,8 +124,16 @@ typedef struct {
 #define PLAYER_LIMIT ((FLOOR_TILES - 1) * 1000) /* keep players on the floor */
 
 /* Make `pl` the current place (used for collision and level_mesh, so it must outlive the
- * game) and return the starting state with `players` players. */
+ * game) and return the starting state with `players` players, each with a default coat
+ * colour and their avatar built. */
 world world_init(const place *pl, int players);
+
+/* Avatars: guy_mesh wearing player i's coat colour (the coat's palette entries swapped).
+ * Draw player i with avatar_meshes[i]. Built for all MAX_PLAYERS by world_init(); call
+ * avatar_build() again if a coat changes (then re-upload the texture). */
+extern texture avatar_textures[MAX_PLAYERS];
+extern mesh avatar_meshes[MAX_PLAYERS];
+void avatar_build(int i, const uint8_t coat[3]);
 
 /* Advance one frame; inputs[i] drives players[i]. */
 world world_update(world w, const input inputs[MAX_PLAYERS]);

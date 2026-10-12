@@ -21,7 +21,7 @@ typedef struct {
     float tc[2];
 } vertex;
 
-static C3D_Tex gpu_textures[PLACE_MAX_TEXTURES + 1]; /* by texture slot */
+static C3D_Tex gpu_textures[MAX_PLAYERS + PLACE_MAX_TEXTURES]; /* by texture slot */
 
 /* Bit-interleave x and y (0..7) into a position in an 8x8 tile (Morton / Z order). */
 static u32 morton8(u32 x, u32 y)
@@ -36,8 +36,10 @@ static u32 morton8(u32 x, u32 y)
  * Morton order, rows stored bottom-up) and upload it, nearest-filtered. */
 static void upload_textures(void)
 {
-    texture *all[PLACE_MAX_TEXTURES + 1] = {&guy_texture}; /* the avatar's, then the place's */
-    int count = 1;
+    texture *all[MAX_PLAYERS + PLACE_MAX_TEXTURES]; /* the avatars', then the place's */
+    int count = 0;
+    for (int i = 0; i < MAX_PLAYERS; i++)
+        all[count++] = &avatar_textures[i];
     for (int i = 0; i < pl.texture_count; i++)
         all[count++] = &pl.textures[i];
     static u16 data[TEXTURE_MAX * TEXTURE_MAX];
@@ -214,7 +216,7 @@ int main(void)
             Mtx_Translate(&m, p->x / 1000.0f, FLOOR_Y + p->y / 1000.0f, p->z / 1000.0f, true);
             Mtx_RotateY(&m, C3D_AngleFromDegrees(p->heading / 10.0f), true);
             C3D_FVUnifMtx4x4(GPU_VERTEX_SHADER, u_mv, &m);
-            set_texture(guy_mesh.texture);
+            set_texture(avatar_meshes[i].texture);
             C3D_DrawArrays(GPU_TRIANGLES, BG_VERTS, guy_mesh.tris * 3);
             set_texture(NULL);
         }

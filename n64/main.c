@@ -6,14 +6,16 @@
 #define STICK_DEADZONE 32
 
 static place pl; /* the loaded place; mesh parts are drawn from it */
-static GLuint gpu_textures[PLACE_MAX_TEXTURES + 1]; /* by texture slot */
+static GLuint gpu_textures[MAX_PLAYERS + PLACE_MAX_TEXTURES]; /* by texture slot */
 
 /* Expand each 16-colour place texture to RGBA16 (32x32 = 2 KB, fits TMEM) and upload it,
  * nearest-filtered. */
 static void upload_textures(void)
 {
-    texture *all[PLACE_MAX_TEXTURES + 1] = {&guy_texture}; /* the avatar's, then the place's */
-    int count = 1;
+    texture *all[MAX_PLAYERS + PLACE_MAX_TEXTURES]; /* the avatars', then the place's */
+    int count = 0;
+    for (int i = 0; i < MAX_PLAYERS; i++)
+        all[count++] = &avatar_textures[i];
     for (int i = 0; i < pl.texture_count; i++)
         all[count++] = &pl.textures[i];
     glGenTextures(count, gpu_textures);
@@ -114,7 +116,7 @@ int main(void)
     world w = world_init(&pl, 1);
     upload_textures();
     camera cam = camera_init();
-    GLuint level_list = compile_mesh(&level_mesh), guy_list = compile_mesh(&guy_mesh);
+    GLuint level_list = compile_mesh(&level_mesh), guy_list = compile_mesh(&avatar_meshes[0]); /* geometry only: the texture is bound per player */
     GLuint mesh_lists[PLACE_MAX_MESHES];
     for (int i = 0; i < pl.mesh_count; i++)
         mesh_lists[i] = compile_mesh(&pl.meshes[i]);
@@ -150,7 +152,7 @@ int main(void)
             glPushMatrix();
             glTranslatef(p->x / 1000.0f, FLOOR_Y + p->y / 1000.0f, p->z / 1000.0f);
             glRotatef(p->heading / 10.0f, 0.0f, 1.0f, 0.0f);
-            bind_texture(&guy_mesh);
+            bind_texture(&avatar_meshes[i]);
             glCallList(guy_list);
             glDisable(GL_TEXTURE_2D);
             glPopMatrix();

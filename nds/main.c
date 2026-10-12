@@ -3,14 +3,16 @@
 #include "world.h"
 
 static place pl; /* the loaded place; mesh parts are drawn from it */
-static int gpu_textures[PLACE_MAX_TEXTURES + 1]; /* by texture slot */
+static int gpu_textures[MAX_PLAYERS + PLACE_MAX_TEXTURES]; /* by texture slot */
 
 /* The DS's 16-colour texture format matches the place format (4 bits, low nibble = left
  * pixel), so pixels go up as they are; only the palette is converted to RGB15. */
 static void upload_textures(void)
 {
-    texture *all[PLACE_MAX_TEXTURES + 1] = {&guy_texture}; /* the avatar's, then the place's */
-    int count = 1;
+    texture *all[MAX_PLAYERS + PLACE_MAX_TEXTURES]; /* the avatars', then the place's */
+    int count = 0;
+    for (int i = 0; i < MAX_PLAYERS; i++)
+        all[count++] = &avatar_textures[i];
     for (int i = 0; i < pl.texture_count; i++)
         all[count++] = &pl.textures[i];
     vramSetBankA(VRAM_A_TEXTURE);
@@ -138,7 +140,7 @@ int main(void)
             glPushMatrix();
             glTranslatef32(f32m(p->x), inttof32(FLOOR_Y) + f32m(p->y), f32m(p->z));
             glRotateYi(angle(p->heading));
-            draw_mesh(&guy_mesh);
+            draw_mesh(&avatar_meshes[i]);
             glPopMatrix(1);
         }
 

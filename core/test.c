@@ -248,6 +248,27 @@ int main(void)
         for (int a = 0; a < 2; a++)
             assert(guy_mesh.uvs[i][a] >= 0 && guy_mesh.uvs[i][a] <= MESH_ONE);
 
+    /* Each player's avatar wears their coat: the coat's palette entries are swapped (the
+     * lightest grey becomes the coat colour), everything else is the guy's atlas. */
+    for (int i = 0; i < MAX_PLAYERS; i++) {
+        const texture *t = avatar_meshes[i].texture;
+        assert(t == &avatar_textures[i] && t->pixels == guy_texture.pixels);
+        assert(avatar_meshes[i].verts == guy_mesh.verts && avatar_meshes[i].uvs == guy_mesh.uvs);
+        for (int c = 0; c < 16; c++) {
+            for (int a = 0; a < 3; a++) {
+                if (c < guy_texture_coat_first)
+                    assert(t->palette[c][a] == guy_texture.palette[c][a]);
+                else
+                    assert(t->palette[c][a] <= w.players[i].coat[a]);
+            }
+        }
+    }
+    int brightest = guy_texture_coat_first;
+    for (int c = guy_texture_coat_first; c < 16; c++)
+        if (guy_texture.palette[c][0] > guy_texture.palette[brightest][0])
+            brightest = c;
+    assert(avatar_textures[0].palette[brightest][0] == 196 && avatar_textures[1].palette[brightest][2] == 172);
+
     /* Model: feet on y = 0, about 2.4 units tall. */
     int lo = 0, hi = 0;
     for (int i = 0; i < guy_mesh.tris * 3; i++) {

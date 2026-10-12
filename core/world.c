@@ -1,24 +1,11 @@
 #include "world.h"
 
-/* A small test course: a wall, three steps up to a floating platform, a pillar, and a
- * curb low enough to walk up. */
-const part level_parts[] = {
-    {-4000, 1000, 0, 1000, 2000, 6000, {110, 120, 140}},     /* wall */
-    {0, 300, -4000, 2000, 600, 2000, {196, 40, 28}},         /* step 1, top 0.6 */
-    {0, 600, -6000, 2000, 1200, 2000, {245, 205, 48}},       /* step 2, top 1.2 */
-    {0, 900, -8000, 2000, 1800, 2000, {75, 151, 75}},        /* step 3, top 1.8 */
-    {3500, 1650, -8000, 3000, 300, 2000, {13, 105, 172}},    /* floating platform, top 1.8 */
-    {6000, 1500, -4000, 1000, 3000, 1000, {107, 50, 124}},   /* pillar */
-    {0, 150, 4000, 4000, 300, 1000, {160, 165, 170}},        /* curb, 0.3 high: step up */
-};
-const int level_part_count = sizeof level_parts / sizeof level_parts[0];
+static const place *level; /* the current place, set by world_init() */
 
 #define FLOOR_TRIS (FLOOR_TILES * FLOOR_TILES * 2)
-#define PART_TRIS 10 /* 5 faces: no bottom */
-#define LEVEL_TRIS (FLOOR_TRIS + PART_TRIS * (int)(sizeof level_parts / sizeof level_parts[0]))
-static int16_t level_verts[LEVEL_TRIS * 3][3];
-static uint8_t level_colors[LEVEL_TRIS][3];
-const mesh level_mesh = {level_verts, level_colors, LEVEL_TRIS};
+static int16_t level_verts[PLACE_MAX_TRIS * 3][3]; /* place_load() keeps us within the budget */
+static uint8_t level_colors[PLACE_MAX_TRIS][3];
+mesh level_mesh = {level_verts, level_colors, 0};
 
 #define MOVE_SPEED 60 /* thousandths of a unit per frame */
 #define DIAGONAL 2896 /* 1/sqrt(2), scaled by 4096 */
@@ -56,9 +43,12 @@ static void build_level_mesh(void)
             t = add_quad(t, c, color, 100);
         }
     }
-    /* Parts: flat-shaded by face direction so the edges read without lighting. */
-    for (int i = 0; i < level_part_count; i++) {
-        const part *p = &level_parts[i];
+    /* Box parts: flat-shaded by face direction so the edges read without lighting. Mesh
+     * parts are drawn by the platforms with their own model. */
+    for (int i = 0; i < level->part_count; i++) {
+        const part *p = &level->parts[i];
+        if (p->mesh >= 0)
+            continue;
         int x0 = p->x - p->sx / 2, x1 = p->x + p->sx / 2;
         int y0 = fy + p->y - p->sy / 2, y1 = fy + p->y + p->sy / 2;
         int z0 = p->z - p->sz / 2, z1 = p->z + p->sz / 2;
@@ -73,10 +63,12 @@ static void build_level_mesh(void)
         for (int f = 0; f < 5; f++)
             t = add_quad(t, faces[f], p->color, shade[f]);
     }
+    level_mesh.tris = t;
 }
 
-world world_init(int players)
+world world_init(const place *pl, int players)
 {
+    level = pl;
     build_level_mesh();
     world w = {0};
     w.player_count = players;
@@ -130,8 +122,8 @@ static int wrap3600(int a)
  * overlapping. */
 static const part *hit_part(const player *p)
 {
-    for (int i = 0; i < level_part_count; i++) {
-        const part *q = &level_parts[i];
+    for (int i = 0; i < level->part_count; i++) {
+        const part *q = &level->parts[i];
         if (p->x + PLAYER_RADIUS > q->x - q->sx / 2 && p->x - PLAYER_RADIUS < q->x + q->sx / 2 &&
             p->z + PLAYER_RADIUS > q->z - q->sz / 2 && p->z - PLAYER_RADIUS < q->z + q->sz / 2 &&
             p->y + PLAYER_HEIGHT > q->y - q->sy / 2 && p->y < q->y + q->sy / 2)

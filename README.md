@@ -49,14 +49,28 @@ make n64-reset  # drop the cached N64 toolchain + libdragon volume (e.g. after a
 - DS: melonDS 1.0+, or a flashcart. DeSmuME 0.9.13 shows white screens for anything built with libnds 2 / calico.
 - 3DS: Azahar, or the Homebrew Launcher / `3dslink`
 
-## Models
+## Places
 
-`assets/model/*.obj` are converted to C with `tools/obj2c.py` (Z-up, front facing -Y, as
-exported from OwlCAD). The output is committed, so builds don't need Python:
+A place is the content of one game: parts (boxes, optionally drawn with a custom model) and
+the models they use. Places are data, loaded and validated at runtime by `core/place.c`,
+so they can be delivered over the network later. The built-in place is
+`assets/places/course.json`, packed into `core/default_place.c`:
+
+```sh
+python3 tools/placec.py assets/places/course.json core/default_place.c default_place
+python3 tools/placec.py assets/places/course.json course.place   # the same, as a binary file
+```
+
+The format is described at the top of `tools/placec.py`. Budgets (parts, meshes, triangles)
+are in `core/world.h` and are sized for the weakest console.
+
+Engine assets (like the avatar) are compiled in instead, with `tools/obj2c.py`:
 
 ```sh
 python3 tools/obj2c.py assets/model/guy.obj guy_mesh 160,235,245 > core/guy_mesh.c
 ```
+
+Models are OBJ files exported Z-up with the front facing -Y (as from OwlCAD).
 
 ## CI
 

@@ -5,6 +5,8 @@
 
 #define STICK_DEADZONE 32
 
+static place pl; /* the loaded place; mesh parts are drawn from it */
+
 /* Stick moves, A jumps, D-pad orbits, C-up/C-down zoom in/out. */
 static unsigned read_input(void)
 {
@@ -64,9 +66,13 @@ int main(void)
     glEnable(GL_DEPTH_TEST);
     glClearColor(0.1f, 0.1f, 0.15f, 1.0f);
 
-    world w = world_init(1);
+    assertf(place_load(&pl, default_place, default_place_size) == PLACE_OK, "built-in place failed to load");
+    world w = world_init(&pl, 1);
     camera cam = camera_init();
     GLuint level_list = compile_mesh(&level_mesh), guy_list = compile_mesh(&guy_mesh);
+    GLuint mesh_lists[PLACE_MAX_MESHES];
+    for (int i = 0; i < pl.mesh_count; i++)
+        mesh_lists[i] = compile_mesh(&pl.meshes[i]);
     for (;;) {
         rdpq_attach(display_get(), display_get_zbuf());
         gl_context_begin();
@@ -80,6 +86,17 @@ int main(void)
         glRotatef(-v->yaw / 10.0f, 0.0f, 1.0f, 0.0f);
         glTranslatef(-v->x / 1000.0f, -v->y / 1000.0f, -v->z / 1000.0f);
         glCallList(level_list);
+
+        /* Mesh parts: the model's origin sits at the part's bottom centre. */
+        for (int i = 0; i < pl.part_count; i++) {
+            const part *q = &pl.parts[i];
+            if (q->mesh < 0)
+                continue;
+            glPushMatrix();
+            glTranslatef(q->x / 1000.0f, FLOOR_Y + (q->y - q->sy / 2) / 1000.0f, q->z / 1000.0f);
+            glCallList(mesh_lists[q->mesh]);
+            glPopMatrix();
+        }
 
         for (int i = 0; i < w.player_count; i++) {
             const player *p = &w.players[i];

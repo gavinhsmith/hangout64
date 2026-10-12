@@ -9,6 +9,8 @@
 #define TEX_H 256
 #define TICK_MS (1000.0 / 60.0)
 
+static place pl; /* the loaded place; mesh parts are drawn from it */
+
 /* WASD moves, Space jumps, arrows orbit, Q/E zoom in/out. */
 static unsigned read_input(void)
 {
@@ -60,6 +62,17 @@ static void draw_scene(const world *w, const view *v)
     glRotatef(-v->yaw / 10.0f, 0.0f, 1.0f, 0.0f);
     glTranslatef(-v->x / 1000.0f, -v->y / 1000.0f, -v->z / 1000.0f);
     draw_mesh(&level_mesh);
+
+    /* Mesh parts: the model's origin sits at the part's bottom centre. */
+    for (int i = 0; i < pl.part_count; i++) {
+        const part *q = &pl.parts[i];
+        if (q->mesh < 0)
+            continue;
+        glPushMatrix();
+        glTranslatef(q->x / 1000.0f, FLOOR_Y + (q->y - q->sy / 2) / 1000.0f, q->z / 1000.0f);
+        draw_mesh(&pl.meshes[q->mesh]);
+        glPopMatrix();
+    }
 
     for (int i = 0; i < w->player_count; i++) {
         const player *p = &w->players[i];
@@ -134,7 +147,11 @@ int main(int argc, char **argv)
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
 
-    world w = world_init(1);
+    if (place_load(&pl, default_place, default_place_size) != PLACE_OK) {
+        SDL_Log("built-in place failed to load");
+        return 1;
+    }
+    world w = world_init(&pl, 1);
     camera cam = camera_init();
     double next = (double)SDL_GetTicks();
     for (;;) {

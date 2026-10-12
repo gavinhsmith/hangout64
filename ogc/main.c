@@ -9,6 +9,8 @@
 
 #define FIFO_SIZE (256 * 1024)
 
+static place pl; /* the loaded place; mesh parts are drawn from it */
+
 static GXRModeObj mode;
 static void *xfb[2];
 static void *frame_tex;      /* the 320x240 frame, as an RGBA8 texture */
@@ -123,6 +125,16 @@ static void draw_scene(const world *w, const view *v)
     guMtxTransApply(view, view, 0.0f, 0.0f, -v->dist / 1000.0f);
     draw_mesh(&level_mesh, view);
 
+    /* Mesh parts: the model's origin sits at the part's bottom centre. */
+    for (int i = 0; i < pl.part_count; i++) {
+        const part *q = &pl.parts[i];
+        if (q->mesh < 0)
+            continue;
+        guMtxTrans(t, q->x / 1000.0f, FLOOR_Y + (q->y - q->sy / 2) / 1000.0f, q->z / 1000.0f);
+        guMtxConcat(view, t, mv);
+        draw_mesh(&pl.meshes[q->mesh], mv);
+    }
+
     /* player = translate(x, FLOOR_Y + y, z) rotY(heading) */
     for (int i = 0; i < w->player_count; i++) {
         const player *p = &w->players[i];
@@ -233,7 +245,9 @@ int main(void)
 #endif
 
     int fb = 0, quit = 0;
-    world w = world_init(1);
+    if (place_load(&pl, default_place, default_place_size) != PLACE_OK)
+        exit(1);
+    world w = world_init(&pl, 1);
     camera cam = camera_init();
     while (!quit) {
         draw_scene(&w, &cam.now);

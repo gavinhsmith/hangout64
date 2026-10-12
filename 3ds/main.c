@@ -12,6 +12,9 @@
 
 #define BG_VERTS 6
 
+static place pl; /* the loaded place; mesh parts are drawn from it */
+static int mesh_first[PLACE_MAX_MESHES]; /* where each place mesh starts in the vbo */
+
 typedef struct {
     float pos[3];
     float clr[3];
@@ -33,17 +36,25 @@ static vertex *add_mesh(vertex *out, const mesh *m)
     return out;
 }
 
-/* Background quad (clip space, drawn with identity matrices), then the guy, then the
- * level, all as triangles. Call after world_init() so the level mesh exists. */
+/* Background quad (clip space, drawn with identity matrices), then the guy, the level
+ * and the place's meshes, all as triangles. Call after world_init() so the level mesh
+ * exists. */
 static vertex *build_vbo(void)
 {
     static const float bg[4][2] = {{-1, -1}, {1, -1}, {1, 1}, {-1, 1}};
-    vertex *vbo = linearAlloc(sizeof(vertex) * (BG_VERTS + (guy_mesh.tris + level_mesh.tris) * 3));
+    int tris = guy_mesh.tris + level_mesh.tris;
+    for (int i = 0; i < pl.mesh_count; i++)
+        tris += pl.meshes[i].tris;
+    vertex *vbo = linearAlloc(sizeof(vertex) * (BG_VERTS + tris * 3));
     vertex *out = vbo;
     for (int i = 0; i < 6; i++)
         *out++ = (vertex){{bg[quad_tris[i]][0], bg[quad_tris[i]][1], -0.5f}, {0.1f, 0.1f, 0.15f}};
     out = add_mesh(out, &guy_mesh);
-    add_mesh(out, &level_mesh);
+    out = add_mesh(out, &level_mesh);
+    for (int i = 0; i < pl.mesh_count; i++) {
+        mesh_first[i] = out - vbo;
+        out = add_mesh(out, &pl.meshes[i]);
+    }
     return vbo;
 }
 
@@ -89,7 +100,11 @@ int main(void)
     AttrInfo_AddLoader(attr, 0, GPU_FLOAT, 3);
     AttrInfo_AddLoader(attr, 1, GPU_FLOAT, 3);
 
-    world w = world_init(1);
+    if (place_load(&pl, default_place, default_place_size) != PLACE_OK) {
+        printf("built-in place failed to load\n");
+        return 1;
+    }
+    world w = world_init(&pl, 1);
     camera cam = camera_init();
     vertex *vbo = build_vbo();
     C3D_BufInfo *buf = C3D_GetBufInfo();
@@ -148,6 +163,18 @@ int main(void)
         }
         C3D_FVUnifMtx4x4(GPU_VERTEX_SHADER, u_mv, &view);
         C3D_DrawArrays(GPU_TRIANGLES, BG_VERTS + guy_mesh.tris * 3, level_mesh.tris * 3);
+
+        /* Mesh parts: the model's origin sits at the part's bottom centre. */
+        for (int i = 0; i < pl.part_count; i++) {
+            const part *q = &pl.parts[i];
+            if (q->mesh < 0)
+                continue;
+            C3D_Mtx m;
+            Mtx_Copy(&m, &view);
+            Mtx_Translate(&m, q->x / 1000.0f, FLOOR_Y + (q->y - q->sy / 2) / 1000.0f, q->z / 1000.0f, true);
+            C3D_FVUnifMtx4x4(GPU_VERTEX_SHADER, u_mv, &m);
+            C3D_DrawArrays(GPU_TRIANGLES, mesh_first[q->mesh], pl.meshes[q->mesh].tris * 3);
+        }
         C3D_FrameEnd(0);
     }
 

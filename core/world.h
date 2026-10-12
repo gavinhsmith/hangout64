@@ -1,6 +1,7 @@
 #ifndef WORLD_H
 #define WORLD_H
 
+#include <stddef.h>
 #include <stdint.h>
 
 /* Every platform renders at this size (DS excepted) and scales up. */
@@ -18,22 +19,48 @@ typedef struct {
 #define FLOOR_TILES 10 /* per side, 2 units each, centred on the origin */
 #define FLOOR_Y -1     /* where the floor is drawn; game heights are measured from it */
 
-extern const mesh guy_mesh;   /* feet at y = 0, facing -Z; see tools/obj2c.py */
-extern const mesh level_mesh; /* floor + parts, valid after world_init() */
+extern const mesh guy_mesh; /* feet at y = 0, facing -Z; see tools/obj2c.py */
+extern mesh level_mesh;      /* floor + box parts of the current place, built by world_init() */
 
 /* Lengths are in thousandths of a unit, angles in tenths of a degree. Heights (y) are
  * measured from the floor. Everything here is plain integers so it can be saved or sent
  * over a network as-is and runs identically on every platform. */
 
-/* An axis-aligned box. */
+/* An axis-aligned box. With a mesh, it's drawn as that model (origin at the box's bottom
+ * centre) and still collides as the box. */
 typedef struct {
     int x, y, z;    /* centre */
     int sx, sy, sz; /* size */
     uint8_t color[3];
+    int mesh;       /* index into the place's meshes, or -1 for a plain box */
 } part;
 
-extern const part level_parts[];
-extern const int level_part_count;
+/* A place: the content of one game, loaded from bytes so it can come from the network
+ * later. Format: see tools/placec.py. Everything is validated on load. */
+typedef struct {
+    part *parts;
+    int part_count;
+    mesh *meshes;
+    int mesh_count;
+} place;
+
+enum {
+    PLACE_OK, PLACE_BAD_MAGIC, PLACE_BAD_VERSION, PLACE_TRUNCATED, PLACE_BAD_CHUNK,
+    PLACE_BAD_INDEX, PLACE_BAD_VALUE, PLACE_OVER_BUDGET, PLACE_NO_MEMORY,
+};
+#define PLACE_VERSION 1
+#define PLACE_MAX_PARTS 256
+#define PLACE_MAX_MESHES 32
+#define PLACE_MAX_TRIS 1400 /* floor + parts; leaves the DS's 2048 room for 4 avatars */
+#define PLACE_MAX_COORD 50000 /* positions and sizes; keeps 8.8 mesh coords in range */
+
+/* Load a place from bytes. On failure returns a PLACE_* error and leaves *pl empty. */
+int place_load(place *pl, const uint8_t *data, size_t size);
+void place_free(place *pl);
+
+/* The built-in place, generated from assets/places/course.json. */
+extern const uint8_t default_place[];
+extern const unsigned default_place_size;
 
 /* Held buttons for one frame. Movement is relative to the camera's view. */
 enum {
@@ -68,8 +95,9 @@ typedef struct {
 
 #define PLAYER_LIMIT ((FLOOR_TILES - 1) * 1000) /* keep players on the floor */
 
-/* Build the level mesh and return the starting state with `players` players. */
-world world_init(int players);
+/* Make `pl` the current place (used for collision and level_mesh, so it must outlive the
+ * game) and return the starting state with `players` players. */
+world world_init(const place *pl, int players);
 
 /* Advance one frame; inputs[i] drives players[i]. */
 world world_update(world w, const input inputs[MAX_PLAYERS]);

@@ -2,6 +2,8 @@
 #include <stdio.h>
 #include "world.h"
 
+static place pl; /* the loaded place; mesh parts are drawn from it */
+
 /* D-pad moves, A jumps, R + D-pad orbits, X/Y zoom in/out. */
 static unsigned read_input(u32 keys)
 {
@@ -64,7 +66,11 @@ int main(void)
     gluPerspective(53, 256.0 / 192.0, 0.2, 100);
     glPolyFmt(POLY_ALPHA(31) | POLY_CULL_NONE);
 
-    world w = world_init(1);
+    if (place_load(&pl, default_place, default_place_size) != PLACE_OK) {
+        printf("built-in place failed to load\n");
+        return 1;
+    }
+    world w = world_init(&pl, 1);
     camera cam = camera_init();
     for (;;) {
         scanKeys();
@@ -79,6 +85,17 @@ int main(void)
         glRotateYi(angle(-v->yaw));
         glTranslatef32(-f32m(v->x), -f32m(v->y), -f32m(v->z));
         draw_mesh(&level_mesh);
+
+        /* Mesh parts: the model's origin sits at the part's bottom centre. */
+        for (int i = 0; i < pl.part_count; i++) {
+            const part *q = &pl.parts[i];
+            if (q->mesh < 0)
+                continue;
+            glPushMatrix();
+            glTranslatef32(f32m(q->x), inttof32(FLOOR_Y) + f32m(q->y - q->sy / 2), f32m(q->z));
+            draw_mesh(&pl.meshes[q->mesh]);
+            glPopMatrix(1);
+        }
 
         for (int i = 0; i < w.player_count; i++) {
             const player *p = &w.players[i];

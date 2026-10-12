@@ -12,6 +12,8 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - run: make test
+      # Place files will come from the network: run the loader tests under sanitizers too.
+      - run: make -C core test CC="gcc -g -fsanitize=address,undefined -fno-sanitize-recover=all"
 
   console:
     needs: test

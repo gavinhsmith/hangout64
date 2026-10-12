@@ -20,7 +20,7 @@ include $(DEVKITPPC)/$(PLATFORM)_rules
 
 TARGET := hangout64_$(PLATFORM)
 BUILD  := build/$(PLATFORM)
-OBJS   := $(BUILD)/main.o $(BUILD)/world.o $(BUILD)/guy_mesh.o
+OBJS   := $(BUILD)/main.o $(BUILD)/world.o $(BUILD)/place.o $(BUILD)/guy_mesh.o $(BUILD)/default_place.o
 CFLAGS := -O2 -Wall $(MACHDEP) -I$(LIBOGC_INC) -I../core -MMD -MP
 LIBS   := -L$(LIBOGC_LIB) $(if $(filter wii,$(PLATFORM)),-lwiiuse -lbte) -logc -lm
 

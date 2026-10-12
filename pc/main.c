@@ -120,7 +120,8 @@ static void draw_scene(const world *w, const view *v)
     }
 }
 
-/* Grab the 320x240 frame and draw it integer-scaled, centred, black bars around. */
+/* Grab the 320x240 frame and draw it as big as fits (keeping 4:3, nearest-filtered),
+ * centred, black bars on the sides that are left over. */
 static void present(SDL_Window *win, GLuint tex)
 {
     glBindTexture(GL_TEXTURE_2D, tex);
@@ -128,9 +129,7 @@ static void present(SDL_Window *win, GLuint tex)
 
     int w, h;
     SDL_GetWindowSizeInPixels(win, &w, &h);
-    int scale = SDL_min(w / SCREEN_W, h / SCREEN_H);
-    if (scale < 1)
-        scale = 1;
+    float scale = SDL_min((float)w / SCREEN_W, (float)h / SCREEN_H);
     float x0 = (w - SCREEN_W * scale) / 2.0f, y0 = (h - SCREEN_H * scale) / 2.0f;
     float x1 = x0 + SCREEN_W * scale, y1 = y0 + SCREEN_H * scale;
     float u = (float)SCREEN_W / TEX_W, v = (float)SCREEN_H / TEX_H;
@@ -197,6 +196,8 @@ int main(int argc, char **argv)
             if (e.type == SDL_EVENT_QUIT ||
                 (e.type == SDL_EVENT_KEY_DOWN && e.key.key == SDLK_ESCAPE))
                 goto done;
+            if (e.type == SDL_EVENT_KEY_DOWN && e.key.key == SDLK_F11 && !e.key.repeat)
+                SDL_SetWindowFullscreen(win, !(SDL_GetWindowFlags(win) & SDL_WINDOW_FULLSCREEN));
         }
         /* Fixed 60 Hz update regardless of monitor refresh rate. */
         while ((double)SDL_GetTicks() >= next) {

@@ -30,6 +30,9 @@ zoom ease too. Walk one way for a moment and the camera slowly swings round behi
 
 On the Wii a GameCube pad works too, with the GameCube layout.
 
+On PC, F11 toggles fullscreen. The window can be any size: the picture is scaled to fill it,
+keeping 4:3.
+
 ## Building
 
 ```sh

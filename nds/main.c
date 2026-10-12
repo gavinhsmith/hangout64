@@ -2,12 +2,25 @@
 #include <stdio.h>
 #include "cube.h"
 
+/* D-pad orbits, L/R zoom in/out. */
+static unsigned read_input(u32 keys)
+{
+    unsigned cam = 0;
+    if (keys & KEY_LEFT)  cam |= CAM_LEFT;
+    if (keys & KEY_RIGHT) cam |= CAM_RIGHT;
+    if (keys & KEY_UP)    cam |= CAM_UP;
+    if (keys & KEY_DOWN)  cam |= CAM_DOWN;
+    if (keys & KEY_L)     cam |= CAM_IN;
+    if (keys & KEY_R)     cam |= CAM_OUT;
+    return cam;
+}
+
 /* The DS renders at its native 256x192 (still 4:3, so same camera). */
 int main(void)
 {
     videoSetMode(MODE_0_3D);
     consoleDemoInit(); /* text console on the bottom screen */
-    printf("hangout64\n\nPress START to exit.\n");
+    printf("hangout64\n\nD-pad: orbit\nL/R:   zoom\nSTART: exit\n");
     glInit();
     glClearColor(3, 3, 5, 31);
     glClearPolyID(63);
@@ -20,6 +33,7 @@ int main(void)
     glPolyFmt(POLY_ALPHA(31) | POLY_CULL_NONE);
 
     int angle = 0;
+    camera cam = CAMERA_INIT;
     for (;;) {
         scanKeys();
         if (keysDown() & KEY_START)
@@ -27,7 +41,9 @@ int main(void)
 
         glMatrixMode(GL_MODELVIEW);
         glLoadIdentity();
-        glTranslatef32(0, 0, inttof32(-5));
+        glTranslatef32(0, 0, -inttof32(cam.dist) / 10);
+        glRotateXi(degreesToAngle((cam.pitch + 360) % 360));
+        glRotateYi(degreesToAngle(360 - cam.yaw));
         glRotateXi(degreesToAngle(angle));
         glRotateYi(degreesToAngle(angle));
 
@@ -44,6 +60,7 @@ int main(void)
         glFlush(0);
         swiWaitForVBlank();
         angle = cube_step(angle);
+        cam = camera_update(cam, read_input(keysHeld()));
     }
     return 0;
 }

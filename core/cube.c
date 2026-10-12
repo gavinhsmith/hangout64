@@ -18,3 +18,22 @@ int cube_step(int angle)
 {
     return (angle + 1) % 360;
 }
+
+static int clamp(int v, int lo, int hi)
+{
+    return v < lo ? lo : v > hi ? hi : v;
+}
+
+camera camera_update(camera c, unsigned input)
+{
+    if (input & CAM_LEFT)  c.yaw -= 2;
+    if (input & CAM_RIGHT) c.yaw += 2;
+    if (input & CAM_UP)    c.pitch += 2;
+    if (input & CAM_DOWN)  c.pitch -= 2;
+    if (input & CAM_IN)    c.dist -= 1;
+    if (input & CAM_OUT)   c.dist += 1;
+    c.yaw = (c.yaw % 360 + 360) % 360;
+    c.pitch = clamp(c.pitch, -CAM_PITCH_MAX, CAM_PITCH_MAX);
+    c.dist = clamp(c.dist, CAM_DIST_MIN, CAM_DIST_MAX);
+    return c;
+}

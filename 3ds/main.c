@@ -39,11 +39,24 @@ static vertex *build_vbo(void)
     return vbo;
 }
 
+/* Circle pad or D-pad orbits, L/R zoom in/out. */
+static unsigned read_input(u32 keys)
+{
+    unsigned cam = 0;
+    if (keys & KEY_LEFT)  cam |= CAM_LEFT;
+    if (keys & KEY_RIGHT) cam |= CAM_RIGHT;
+    if (keys & KEY_UP)    cam |= CAM_UP;
+    if (keys & KEY_DOWN)  cam |= CAM_DOWN;
+    if (keys & KEY_L)     cam |= CAM_IN;
+    if (keys & KEY_R)     cam |= CAM_OUT;
+    return cam;
+}
+
 int main(void)
 {
     gfxInitDefault();
     consoleInit(GFX_BOTTOM, NULL);
-    printf("hangout64\n\nPress START to exit.\n");
+    printf("hangout64\n\nCircle pad: orbit\nL/R:        zoom\nSTART:      exit\n");
 
     C3D_Init(C3D_DEFAULT_CMDBUF_SIZE);
     /* The top screen is physically rotated: its framebuffer is 240 wide, 400 tall. */
@@ -79,14 +92,18 @@ int main(void)
     Mtx_Identity(&identity);
 
     int angle = 0;
+    camera cam = CAMERA_INIT;
     while (aptMainLoop()) {
         hidScanInput();
         if (hidKeysDown() & KEY_START)
             break;
+        cam = camera_update(cam, read_input(hidKeysHeld()));
 
         C3D_Mtx mv;
         Mtx_Identity(&mv);
-        Mtx_Translate(&mv, 0.0f, 0.0f, -5.0f, true);
+        Mtx_Translate(&mv, 0.0f, 0.0f, -cam.dist / 10.0f, true);
+        Mtx_RotateX(&mv, C3D_AngleFromDegrees(cam.pitch), true);
+        Mtx_RotateY(&mv, C3D_AngleFromDegrees(-cam.yaw), true);
         Mtx_RotateX(&mv, C3D_AngleFromDegrees(angle), true);
         Mtx_RotateY(&mv, C3D_AngleFromDegrees(angle), true);
 

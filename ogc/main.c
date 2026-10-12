@@ -73,17 +73,36 @@ static void video_init(void)
     GX_LoadProjectionMtx(proj, GX_PERSPECTIVE);
 }
 
-static int quit_pressed(void)
+#define STICK_DEADZONE 32
+
+/* GC pad: stick or D-pad orbits, L/R zoom in/out. Wii Remote: D-pad orbits, -/+ zoom.
+ * START / HOME sets *quit. */
+static unsigned read_input(int *quit)
 {
     PAD_ScanPads();
-    if (PAD_ButtonsDown(0) & PAD_BUTTON_START)
-        return 1;
+    u16 b = PAD_ButtonsHeld(0);
+    s8 x = PAD_StickX(0), y = PAD_StickY(0);
+    unsigned cam = 0;
+    if ((b & PAD_BUTTON_LEFT) || x < -STICK_DEADZONE)  cam |= CAM_LEFT;
+    if ((b & PAD_BUTTON_RIGHT) || x > STICK_DEADZONE)  cam |= CAM_RIGHT;
+    if ((b & PAD_BUTTON_UP) || y > STICK_DEADZONE)     cam |= CAM_UP;
+    if ((b & PAD_BUTTON_DOWN) || y < -STICK_DEADZONE)  cam |= CAM_DOWN;
+    if (b & PAD_TRIGGER_L)                             cam |= CAM_IN;
+    if (b & PAD_TRIGGER_R)                             cam |= CAM_OUT;
+    *quit = (PAD_ButtonsDown(0) & PAD_BUTTON_START) != 0;
 #ifdef HW_RVL
     WPAD_ScanPads();
+    u32 w = WPAD_ButtonsHeld(0);
+    if (w & WPAD_BUTTON_LEFT)  cam |= CAM_LEFT;
+    if (w & WPAD_BUTTON_RIGHT) cam |= CAM_RIGHT;
+    if (w & WPAD_BUTTON_UP)    cam |= CAM_UP;
+    if (w & WPAD_BUTTON_DOWN)  cam |= CAM_DOWN;
+    if (w & WPAD_BUTTON_MINUS) cam |= CAM_IN;
+    if (w & WPAD_BUTTON_PLUS)  cam |= CAM_OUT;
     if (WPAD_ButtonsDown(0) & WPAD_BUTTON_HOME)
-        return 1;
+        *quit = 1;
 #endif
-    return 0;
+    return cam;
 }
 
 int main(void)
@@ -94,14 +113,19 @@ int main(void)
     WPAD_Init();
 #endif
 
-    int angle = 0, fb = 0;
-    while (!quit_pressed()) {
-        Mtx rx, ry, model;
+    int angle = 0, fb = 0, quit = 0;
+    camera cam = CAMERA_INIT;
+    while (!quit) {
+        Mtx rx, ry, model, view, mv;
         guMtxRotDeg(rx, 'x', (f32)angle);
         guMtxRotDeg(ry, 'y', (f32)angle);
         guMtxConcat(rx, ry, model);
-        guMtxTransApply(model, model, 0.0f, 0.0f, -5.0f);
-        GX_LoadPosMtxImm(model, GX_PNMTX0);
+        guMtxRotDeg(rx, 'x', (f32)cam.pitch);
+        guMtxRotDeg(ry, 'y', (f32)-cam.yaw);
+        guMtxConcat(rx, ry, view);
+        guMtxConcat(view, model, mv);
+        guMtxTransApply(mv, mv, 0.0f, 0.0f, -cam.dist / 10.0f);
+        GX_LoadPosMtxImm(mv, GX_PNMTX0);
 
         GX_Begin(GX_QUADS, GX_VTXFMT0, CUBE_FACES * 4);
         for (int f = 0; f < CUBE_FACES; f++) {
@@ -121,6 +145,7 @@ int main(void)
         VIDEO_Flush();
         VIDEO_WaitVSync();
         angle = cube_step(angle);
+        cam = camera_update(cam, read_input(&quit));
     }
     exit(0);
 }

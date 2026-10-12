@@ -9,7 +9,21 @@
 #define TEX_H 256
 #define TICK_MS (1000.0 / 60.0)
 
-static void draw_scene(int angle)
+/* Arrows/WASD orbit, Q/E zoom in/out. */
+static unsigned read_input(void)
+{
+    const bool *k = SDL_GetKeyboardState(NULL);
+    unsigned in = 0;
+    if (k[SDL_SCANCODE_LEFT] || k[SDL_SCANCODE_A])  in |= CAM_LEFT;
+    if (k[SDL_SCANCODE_RIGHT] || k[SDL_SCANCODE_D]) in |= CAM_RIGHT;
+    if (k[SDL_SCANCODE_UP] || k[SDL_SCANCODE_W])    in |= CAM_UP;
+    if (k[SDL_SCANCODE_DOWN] || k[SDL_SCANCODE_S])  in |= CAM_DOWN;
+    if (k[SDL_SCANCODE_Q])                          in |= CAM_IN;
+    if (k[SDL_SCANCODE_E])                          in |= CAM_OUT;
+    return in;
+}
+
+static void draw_scene(int angle, camera cam)
 {
     glViewport(0, 0, SCREEN_W, SCREEN_H);
     glClearColor(0.1f, 0.1f, 0.15f, 1.0f);
@@ -22,7 +36,9 @@ static void draw_scene(int angle)
     glFrustum(-0.1333, 0.1333, -0.1, 0.1, 0.2, 100.0);
     glMatrixMode(GL_MODELVIEW);
     glLoadIdentity();
-    glTranslatef(0.0f, 0.0f, -5.0f);
+    glTranslatef(0.0f, 0.0f, -cam.dist / 10.0f);
+    glRotatef((float)cam.pitch, 1.0f, 0.0f, 0.0f);
+    glRotatef((float)-cam.yaw, 0.0f, 1.0f, 0.0f);
     glRotatef((float)angle, 1.0f, 0.0f, 0.0f);
     glRotatef((float)angle, 0.0f, 1.0f, 0.0f);
 
@@ -101,6 +117,7 @@ int main(int argc, char **argv)
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
 
     int angle = 0;
+    camera cam = CAMERA_INIT;
     double next = (double)SDL_GetTicks();
     for (;;) {
         SDL_Event e;
@@ -112,9 +129,10 @@ int main(int argc, char **argv)
         /* Fixed 60 Hz spin regardless of monitor refresh rate. */
         while ((double)SDL_GetTicks() >= next) {
             angle = cube_step(angle);
+            cam = camera_update(cam, read_input());
             next += TICK_MS;
         }
-        draw_scene(angle);
+        draw_scene(angle, cam);
         present(win, tex);
     }
 done:

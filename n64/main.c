@@ -6,15 +6,20 @@
 #define STICK_DEADZONE 32
 
 static place pl; /* the loaded place; mesh parts are drawn from it */
-static GLuint place_textures[PLACE_MAX_TEXTURES];
+static GLuint gpu_textures[PLACE_MAX_TEXTURES + 1]; /* by texture slot */
 
 /* Expand each 16-colour place texture to RGBA16 (32x32 = 2 KB, fits TMEM) and upload it,
  * nearest-filtered. */
 static void upload_textures(void)
 {
-    glGenTextures(pl.texture_count, place_textures);
-    for (int i = 0; i < pl.texture_count; i++) {
-        const texture *t = &pl.textures[i];
+    texture *all[PLACE_MAX_TEXTURES + 1] = {&guy_texture}; /* the avatar's, then the place's */
+    int count = 1;
+    for (int i = 0; i < pl.texture_count; i++)
+        all[count++] = &pl.textures[i];
+    glGenTextures(count, gpu_textures);
+    for (int i = 0; i < count; i++) {
+        texture *t = all[i];
+        t->slot = i;
         surface_t *s = malloc(sizeof *s);
         *s = surface_alloc(FMT_RGBA16, t->w, t->h); /* uncached, so the RDP sees our writes */
         uint16_t *px = s->buffer;
@@ -24,7 +29,7 @@ static void upload_textures(void)
                 px[y * (s->stride / 2) + x] = (c[0] >> 3) << 11 | (c[1] >> 3) << 6 | (c[2] >> 3) << 1 | 1;
             }
         }
-        glBindTexture(GL_TEXTURE_2D, place_textures[i]);
+        glBindTexture(GL_TEXTURE_2D, gpu_textures[i]);
         glSurfaceTexImageN64(GL_TEXTURE_2D, 0, s, NULL);
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
@@ -34,9 +39,9 @@ static void upload_textures(void)
 /* Textured meshes: the triangle colour tints the texture (GL_MODULATE, the default). */
 static void bind_texture(const mesh *m)
 {
-    if (m->texture >= 0) {
+    if (m->texture) {
         glEnable(GL_TEXTURE_2D);
-        glBindTexture(GL_TEXTURE_2D, place_textures[m->texture]);
+        glBindTexture(GL_TEXTURE_2D, gpu_textures[m->texture->slot]);
     } else {
         glDisable(GL_TEXTURE_2D);
     }
@@ -145,7 +150,9 @@ int main(void)
             glPushMatrix();
             glTranslatef(p->x / 1000.0f, FLOOR_Y + p->y / 1000.0f, p->z / 1000.0f);
             glRotatef(p->heading / 10.0f, 0.0f, 1.0f, 0.0f);
+            bind_texture(&guy_mesh);
             glCallList(guy_list);
+            glDisable(GL_TEXTURE_2D);
             glPopMatrix();
         }
 

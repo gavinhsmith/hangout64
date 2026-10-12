@@ -63,14 +63,17 @@ python3 tools/placec.py assets/places/course.json course.place   # the same, as 
 
 The format is described at the top of `tools/placec.py`. Budgets (parts, meshes, textures,
 triangles) are in `core/world.h` and are sized for the weakest console. Textures are PNGs with
-at most 16 colours, 8, 16 or 32 px per side (32x32 fits the N64's texture memory); they are
-drawn nearest-filtered and tinted by the model's colour. `placec.py` needs Pillow
+at most 16 colours, up to 32 px per side (32x32 fits the N64's texture memory), padded to a
+power of two if needed; they are drawn nearest-filtered and tinted by the model's colour. `placec.py` needs Pillow
 (`pip install pillow`).
 
-Engine assets (like the avatar) are compiled in instead, with `tools/obj2c.py`:
+Engine assets (like the avatar) are compiled in instead, with `tools/obj2c.py`. The avatar's
+texture is the atlas `assets/texture/guy.png`; `tools/guy_uvs.py` maps it onto the model
+(re-run it after re-exporting `guy.obj`, which drops the UVs):
 
 ```sh
-python3 tools/obj2c.py assets/model/guy.obj guy_mesh 160,235,245 > core/guy_mesh.c
+python3 tools/guy_uvs.py assets/model/guy.obj
+python3 tools/obj2c.py assets/model/guy.obj guy_mesh 255,255,255 assets/texture/guy.png guy_texture > core/guy_mesh.c
 ```
 
 Models are OBJ files exported Z-up with the front facing -Y (as from OwlCAD).

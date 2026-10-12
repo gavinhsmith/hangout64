@@ -3,21 +3,26 @@
 #include "world.h"
 
 static place pl; /* the loaded place; mesh parts are drawn from it */
-static int place_textures[PLACE_MAX_TEXTURES];
+static int gpu_textures[PLACE_MAX_TEXTURES + 1]; /* by texture slot */
 
 /* The DS's 16-colour texture format matches the place format (4 bits, low nibble = left
  * pixel), so pixels go up as they are; only the palette is converted to RGB15. */
 static void upload_textures(void)
 {
+    texture *all[PLACE_MAX_TEXTURES + 1] = {&guy_texture}; /* the avatar's, then the place's */
+    int count = 1;
+    for (int i = 0; i < pl.texture_count; i++)
+        all[count++] = &pl.textures[i];
     vramSetBankA(VRAM_A_TEXTURE);
     vramSetBankE(VRAM_E_TEX_PALETTE);
-    glGenTextures(pl.texture_count, place_textures);
-    for (int i = 0; i < pl.texture_count; i++) {
-        const texture *t = &pl.textures[i];
+    glGenTextures(count, gpu_textures);
+    for (int i = 0; i < count; i++) {
+        texture *t = all[i];
+        t->slot = i;
         u16 palette[16];
         for (int c = 0; c < 16; c++)
             palette[c] = RGB15(t->palette[c][0] >> 3, t->palette[c][1] >> 3, t->palette[c][2] >> 3);
-        glBindTexture(0, place_textures[i]);
+        glBindTexture(0, gpu_textures[i]);
         /* Sizes are TEXTURE_SIZE_8/16/32 = log2(pixels) - 3. */
         glTexImage2D(0, 0, GL_RGB16, __builtin_ctz(t->w) - 3, __builtin_ctz(t->h) - 3, 0,
                      TEXGEN_TEXCOORD | GL_TEXTURE_WRAP_S | GL_TEXTURE_WRAP_T, t->pixels);
@@ -61,8 +66,8 @@ static void draw_mesh(const mesh *m)
     glScalef32(inttof32(2), inttof32(2), inttof32(2));
     /* Textured: the triangle colour tints the texture (the default modulate mode).
      * Texture coordinates are 12.4 texels: 8.8 fractions of the texture * size / 16. */
-    const texture *tex = m->texture >= 0 ? &pl.textures[m->texture] : NULL;
-    glBindTexture(0, tex ? place_textures[m->texture] : 0);
+    const texture *tex = m->texture;
+    glBindTexture(0, tex ? gpu_textures[tex->slot] : 0);
     glBegin(GL_TRIANGLES);
     for (int t = 0; t < m->tris; t++) {
         glColor3b(m->colors[t][0], m->colors[t][1], m->colors[t][2]);

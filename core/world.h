@@ -8,17 +8,6 @@
 #define SCREEN_W 320
 #define SCREEN_H 240
 
-/* Triangles with one colour each, optionally textured (the colour then tints the texture).
- * Coordinates are 8.8 fixed point: MESH_ONE = 1 unit, or the whole texture for uvs. */
-#define MESH_ONE 256
-typedef struct {
-    const int16_t (*verts)[3];  /* tris * 3 corners */
-    const uint8_t (*colors)[3]; /* one per triangle */
-    int tris;
-    const int16_t (*uvs)[2];    /* tris * 3 corners, or NULL when untextured */
-    int texture;                /* index into the place's textures, or -1 */
-} mesh;
-
 /* 16 colours, 4 bits per pixel, rows top to bottom, low nibble = left pixel.
  * TEXTURE_MIN..TEXTURE_MAX pixels per side, powers of two: 32x32 at 16 bits is 2 KB, which
  * fits the N64's 4 KB of texture memory without palette support. */
@@ -28,6 +17,7 @@ typedef struct {
     int w, h;
     uint8_t palette[16][3];
     const uint8_t *pixels; /* w * h / 2 bytes */
+    int slot;              /* the renderer's handle for it, assigned when it's uploaded */
 } texture;
 
 /* Palette index of pixel (x, y). */
@@ -37,10 +27,22 @@ static inline int texel(const texture *t, int x, int y)
     return x & 1 ? b >> 4 : b & 15;
 }
 
+/* Triangles with one colour each, optionally textured (the colour then tints the texture).
+ * Coordinates are 8.8 fixed point: MESH_ONE = 1 unit, or the whole texture for uvs. */
+#define MESH_ONE 256
+typedef struct {
+    const int16_t (*verts)[3];  /* tris * 3 corners */
+    const uint8_t (*colors)[3]; /* one per triangle */
+    int tris;
+    const int16_t (*uvs)[2];    /* tris * 3 corners, or NULL when untextured */
+    texture *texture;           /* NULL when untextured */
+} mesh;
+
 #define FLOOR_TILES 10 /* per side, 2 units each, centred on the origin */
 #define FLOOR_Y -1     /* where the floor is drawn; game heights are measured from it */
 
 extern const mesh guy_mesh; /* feet at y = 0, facing -Z; see tools/obj2c.py */
+extern texture guy_texture;
 extern mesh level_mesh;      /* floor + box parts of the current place, built by world_init() */
 
 /* Lengths are in thousandths of a unit, angles in tenths of a degree. Heights (y) are

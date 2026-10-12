@@ -21,7 +21,7 @@ typedef struct {
     float tc[2];
 } vertex;
 
-static C3D_Tex place_textures[PLACE_MAX_TEXTURES];
+static C3D_Tex gpu_textures[PLACE_MAX_TEXTURES + 1]; /* by texture slot */
 
 /* Bit-interleave x and y (0..7) into a position in an 8x8 tile (Morton / Z order). */
 static u32 morton8(u32 x, u32 y)
@@ -36,9 +36,14 @@ static u32 morton8(u32 x, u32 y)
  * Morton order, rows stored bottom-up) and upload it, nearest-filtered. */
 static void upload_textures(void)
 {
+    texture *all[PLACE_MAX_TEXTURES + 1] = {&guy_texture}; /* the avatar's, then the place's */
+    int count = 1;
+    for (int i = 0; i < pl.texture_count; i++)
+        all[count++] = &pl.textures[i];
     static u16 data[TEXTURE_MAX * TEXTURE_MAX];
-    for (int i = 0; i < pl.texture_count; i++) {
-        const texture *t = &pl.textures[i];
+    for (int i = 0; i < count; i++) {
+        texture *t = all[i];
+        t->slot = i;
         for (int y = 0; y < t->h; y++) {
             for (int x = 0; x < t->w; x++) {
                 const uint8_t *c = t->palette[texel(t, x, y)];
@@ -47,20 +52,20 @@ static void upload_textures(void)
                 data[tile * 64 + morton8(x % 8, fy % 8)] = (c[0] >> 3) << 11 | (c[1] >> 2) << 5 | c[2] >> 3;
             }
         }
-        C3D_TexInit(&place_textures[i], t->w, t->h, GPU_RGB565);
-        C3D_TexUpload(&place_textures[i], data);
-        C3D_TexSetFilter(&place_textures[i], GPU_NEAREST, GPU_NEAREST);
-        C3D_TexSetWrap(&place_textures[i], GPU_REPEAT, GPU_REPEAT);
+        C3D_TexInit(&gpu_textures[i], t->w, t->h, GPU_RGB565);
+        C3D_TexUpload(&gpu_textures[i], data);
+        C3D_TexSetFilter(&gpu_textures[i], GPU_NEAREST, GPU_NEAREST);
+        C3D_TexSetWrap(&gpu_textures[i], GPU_REPEAT, GPU_REPEAT);
     }
 }
 
 /* Textured: texture * triangle colour. Untextured: the colour as is. */
-static void set_texture(int index)
+static void set_texture(const texture *t)
 {
     C3D_TexEnv *env = C3D_GetTexEnv(0);
     C3D_TexEnvInit(env);
-    if (index >= 0) {
-        C3D_TexBind(0, &place_textures[index]);
+    if (t) {
+        C3D_TexBind(0, &gpu_textures[t->slot]);
         C3D_TexEnvSrc(env, C3D_Both, GPU_TEXTURE0, GPU_PRIMARY_COLOR, 0);
         C3D_TexEnvFunc(env, C3D_Both, GPU_MODULATE);
     } else {
@@ -197,7 +202,7 @@ int main(void)
         C3D_DepthTest(false, GPU_ALWAYS, GPU_WRITE_COLOR);
         C3D_FVUnifMtx4x4(GPU_VERTEX_SHADER, u_proj, &identity);
         C3D_FVUnifMtx4x4(GPU_VERTEX_SHADER, u_mv, &identity);
-        set_texture(-1);
+        set_texture(NULL);
         C3D_DrawArrays(GPU_TRIANGLES, 0, BG_VERTS);
 
         C3D_DepthTest(true, GPU_GREATER, GPU_WRITE_ALL);
@@ -209,7 +214,9 @@ int main(void)
             Mtx_Translate(&m, p->x / 1000.0f, FLOOR_Y + p->y / 1000.0f, p->z / 1000.0f, true);
             Mtx_RotateY(&m, C3D_AngleFromDegrees(p->heading / 10.0f), true);
             C3D_FVUnifMtx4x4(GPU_VERTEX_SHADER, u_mv, &m);
+            set_texture(guy_mesh.texture);
             C3D_DrawArrays(GPU_TRIANGLES, BG_VERTS, guy_mesh.tris * 3);
+            set_texture(NULL);
         }
         C3D_FVUnifMtx4x4(GPU_VERTEX_SHADER, u_mv, &view);
         C3D_DrawArrays(GPU_TRIANGLES, BG_VERTS + guy_mesh.tris * 3, level_mesh.tris * 3);
@@ -225,7 +232,7 @@ int main(void)
             C3D_FVUnifMtx4x4(GPU_VERTEX_SHADER, u_mv, &m);
             set_texture(pl.meshes[q->mesh].texture);
             C3D_DrawArrays(GPU_TRIANGLES, mesh_first[q->mesh], pl.meshes[q->mesh].tris * 3);
-            set_texture(-1);
+            set_texture(NULL);
         }
         C3D_FrameEnd(0);
     }

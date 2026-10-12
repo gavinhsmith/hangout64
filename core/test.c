@@ -64,8 +64,8 @@ static void test_place_loader(void)
     assert(pl.parts[1].y == 300 && pl.parts[1].sy == 600 && pl.parts[1].mesh == -1);
     assert(pl.parts[7].mesh == 0 && pl.parts[7].color[0] == 230 && pl.parts[8].mesh == 1);
     const mesh *statue = &pl.meshes[0], *crate = &pl.meshes[1];
-    assert(statue->tris == guy_mesh.tris && statue->texture == -1 && statue->uvs == NULL);
-    assert(crate->tris == 12 && crate->texture == 0 && crate->uvs != NULL);
+    assert(statue->tris == guy_mesh.tris && statue->texture == NULL && statue->uvs == NULL);
+    assert(crate->tris == 12 && crate->texture == &pl.textures[0] && crate->uvs != NULL);
     for (int i = 0; i < crate->tris * 3; i++) /* each face maps the whole texture */
         for (int a = 0; a < 2; a++)
             assert(crate->uvs[i][a] == 0 || crate->uvs[i][a] == MESH_ONE);
@@ -241,6 +241,12 @@ int main(void)
     world hop = run(drop, JUMP, 0, 10);
     onstep = camera_update(onstep, 0, &hop.players[0]);
     assert(onstep.target.y == 600 + (hop.players[0].y - 600) / 2);
+
+    /* The avatar is textured with its 16x16 atlas, and every texture coordinate is on it. */
+    assert(guy_mesh.texture == &guy_texture && guy_texture.w == 16 && guy_texture.h == 16);
+    for (int i = 0; i < guy_mesh.tris * 3; i++)
+        for (int a = 0; a < 2; a++)
+            assert(guy_mesh.uvs[i][a] >= 0 && guy_mesh.uvs[i][a] <= MESH_ONE);
 
     /* Model: feet on y = 0, about 2.4 units tall. */
     int lo = 0, hi = 0;

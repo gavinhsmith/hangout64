@@ -11,19 +11,24 @@
 #define TICK_MS (1000.0 / 60.0)
 
 static place pl; /* the loaded place; mesh parts are drawn from it */
-static GLuint place_textures[PLACE_MAX_TEXTURES];
+static GLuint gpu_textures[PLACE_MAX_TEXTURES + 1]; /* by texture slot */
 
 /* Expand each 16-colour place texture to RGB and upload it, nearest-filtered. */
 static void upload_textures(void)
 {
+    texture *all[PLACE_MAX_TEXTURES + 1] = {&guy_texture}; /* the avatar's, then the place's */
+    int count = 1;
+    for (int i = 0; i < pl.texture_count; i++)
+        all[count++] = &pl.textures[i];
     static uint8_t rgb[TEXTURE_MAX * TEXTURE_MAX][3];
-    glGenTextures(pl.texture_count, place_textures);
-    for (int i = 0; i < pl.texture_count; i++) {
-        const texture *t = &pl.textures[i];
+    glGenTextures(count, gpu_textures);
+    for (int i = 0; i < count; i++) {
+        texture *t = all[i];
+        t->slot = i;
         for (int y = 0; y < t->h; y++)
             for (int x = 0; x < t->w; x++)
                 memcpy(rgb[y * t->w + x], t->palette[texel(t, x, y)], 3);
-        glBindTexture(GL_TEXTURE_2D, place_textures[i]);
+        glBindTexture(GL_TEXTURE_2D, gpu_textures[i]);
         glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
         glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, t->w, t->h, 0, GL_RGB, GL_UNSIGNED_BYTE, rgb);
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
@@ -54,9 +59,9 @@ static unsigned read_input(void)
 static void draw_mesh(const mesh *m)
 {
     const float k = 1.0f / MESH_ONE;
-    if (m->texture >= 0) {
+    if (m->texture) {
         glEnable(GL_TEXTURE_2D);
-        glBindTexture(GL_TEXTURE_2D, place_textures[m->texture]);
+        glBindTexture(GL_TEXTURE_2D, gpu_textures[m->texture->slot]);
     }
     glBegin(GL_TRIANGLES);
     for (int t = 0; t < m->tris; t++) {

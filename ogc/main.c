@@ -10,14 +10,19 @@
 #define FIFO_SIZE (256 * 1024)
 
 static place pl; /* the loaded place; mesh parts are drawn from it */
-static GXTexObj place_textures[PLACE_MAX_TEXTURES];
+static GXTexObj gpu_textures[PLACE_MAX_TEXTURES + 1]; /* by texture slot */
 
 /* Expand each 16-colour place texture to RGB565 in GX's tiled layout (4x4-pixel tiles,
  * 32 bytes each, row-major) and set it up nearest-filtered. */
 static void upload_textures(void)
 {
-    for (int i = 0; i < pl.texture_count; i++) {
-        const texture *t = &pl.textures[i];
+    texture *all[PLACE_MAX_TEXTURES + 1] = {&guy_texture}; /* the avatar's, then the place's */
+    int count = 1;
+    for (int i = 0; i < pl.texture_count; i++)
+        all[count++] = &pl.textures[i];
+    for (int i = 0; i < count; i++) {
+        texture *t = all[i];
+        t->slot = i;
         uint16_t *buf = memalign(32, t->w * t->h * 2);
         for (int y = 0; y < t->h; y++) {
             for (int x = 0; x < t->w; x++) {
@@ -27,8 +32,8 @@ static void upload_textures(void)
             }
         }
         DCFlushRange(buf, t->w * t->h * 2);
-        GX_InitTexObj(&place_textures[i], buf, t->w, t->h, GX_TF_RGB565, GX_REPEAT, GX_REPEAT, GX_FALSE);
-        GX_InitTexObjLOD(&place_textures[i], GX_NEAR, GX_NEAR, 0.0f, 0.0f, 0.0f, GX_FALSE, GX_FALSE, GX_ANISO_1);
+        GX_InitTexObj(&gpu_textures[i], buf, t->w, t->h, GX_TF_RGB565, GX_REPEAT, GX_REPEAT, GX_FALSE);
+        GX_InitTexObjLOD(&gpu_textures[i], GX_NEAR, GX_NEAR, 0.0f, 0.0f, 0.0f, GX_FALSE, GX_FALSE, GX_ANISO_1);
     }
 }
 
@@ -111,10 +116,10 @@ static void video_init(void)
  * the texture by the triangle colour; untextured ones pass the colour straight through. */
 static void draw_mesh(const mesh *m, Mtx mv)
 {
-    int textured = m->texture >= 0;
+    int textured = m->texture != NULL;
     GX_LoadPosMtxImm(mv, GX_PNMTX0);
     if (textured) {
-        GX_LoadTexObj(&place_textures[m->texture], GX_TEXMAP0);
+        GX_LoadTexObj(&gpu_textures[m->texture->slot], GX_TEXMAP0);
         GX_SetVtxDesc(GX_VA_TEX0, GX_DIRECT);
         GX_SetNumTexGens(1);
         GX_SetTevOrder(GX_TEVSTAGE0, GX_TEXCOORD0, GX_TEXMAP0, GX_COLOR0A0);

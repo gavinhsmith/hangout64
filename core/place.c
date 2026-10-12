@@ -61,25 +61,28 @@ static int load_texture(texture *t, const uint8_t *d, uint32_t len)
 
 /* Indexed triangles in the file, expanded to the 3-corners-per-triangle mesh the
  * renderers draw. */
-static int load_mesh(mesh *m, const uint8_t *d, uint32_t len)
+static int load_mesh(const place *pl, mesh *m, const uint8_t *d, uint32_t len)
 {
     if (len < MESH_HEADER)
         return PLACE_BAD_CHUNK;
     uint32_t nv = rd16(d), nt = rd16(d + 2);
-    m->texture = (int16_t)rd16(d + 4); /* checked against the texture count in check_place() */
+    int tex = (int16_t)rd16(d + 4);
     if (nv == 0 || nt == 0 || len != MESH_HEADER + nv * MESH_VERT + nt * MESH_TRI)
         return PLACE_BAD_CHUNK;
     if (nt > PLACE_MAX_TRIS)
         return PLACE_OVER_BUDGET;
+    if (tex < -1 || tex >= pl->texture_count) /* textures come before the meshes using them */
+        return PLACE_BAD_INDEX;
+    m->texture = tex >= 0 ? &pl->textures[tex] : NULL; /* stable: allocated at full size */
 
     int16_t (*verts)[3] = malloc(nt * 3 * sizeof *verts);
     uint8_t (*colors)[3] = malloc(nt * sizeof *colors);
-    int16_t (*uvs)[2] = m->texture >= 0 ? malloc(nt * 3 * sizeof *uvs) : NULL;
+    int16_t (*uvs)[2] = m->texture ? malloc(nt * 3 * sizeof *uvs) : NULL;
     m->verts = verts; /* set before checking, so place_free cleans up either way */
     m->colors = colors;
     m->uvs = uvs;
     m->tris = (int)nt;
-    if (!verts || !colors || (m->texture >= 0 && !uvs))
+    if (!verts || !colors || (m->texture && !uvs))
         return PLACE_NO_MEMORY;
 
     const uint8_t *vd = d + MESH_HEADER, *td = vd + nv * MESH_VERT;
@@ -136,13 +139,9 @@ static int load_parts(place *pl, const uint8_t *d, uint32_t len)
     return PLACE_OK;
 }
 
-/* Cross-chunk checks: texture and mesh references, and the triangle budget for what gets
- * drawn. */
+/* Cross-chunk checks: mesh references, and the triangle budget for what gets drawn. */
 static int check_place(const place *pl)
 {
-    for (int i = 0; i < pl->mesh_count; i++)
-        if (pl->meshes[i].texture < -1 || pl->meshes[i].texture >= pl->texture_count)
-            return PLACE_BAD_INDEX;
     long tris = FLOOR_TRIS;
     for (int i = 0; i < pl->part_count; i++) {
         int m = pl->parts[i].mesh;
@@ -183,13 +182,11 @@ int place_load(place *pl, const uint8_t *data, size_t size)
                 err = PLACE_OVER_BUDGET;
                 break;
             }
-            texture *grown = realloc(pl->textures, (pl->texture_count + 1) * sizeof *grown);
-            if (!grown) {
+            /* Full size up front, never moved: meshes point into it. */
+            if (!pl->textures && !(pl->textures = calloc(PLACE_MAX_TEXTURES, sizeof *pl->textures))) {
                 err = PLACE_NO_MEMORY;
                 break;
             }
-            pl->textures = grown;
-            memset(&pl->textures[pl->texture_count], 0, sizeof *grown);
             err = load_texture(&pl->textures[pl->texture_count++], d, len);
         } else if (memcmp(tag, "MESH", 4) == 0) {
             if (pl->mesh_count == PLACE_MAX_MESHES) {
@@ -203,7 +200,7 @@ int place_load(place *pl, const uint8_t *data, size_t size)
             }
             pl->meshes = grown;
             memset(&pl->meshes[pl->mesh_count], 0, sizeof *grown);
-            err = load_mesh(&pl->meshes[pl->mesh_count++], d, len);
+            err = load_mesh(pl, &pl->meshes[pl->mesh_count++], d, len);
         } else if (memcmp(tag, "PART", 4) == 0) {
             err = have_parts++ ? PLACE_BAD_CHUNK : load_parts(pl, d, len);
         }

@@ -1,6 +1,7 @@
 #include "world.h"
 
-/* A small test course: a wall, three steps up to a floating platform, and a pillar. */
+/* A small test course: a wall, three steps up to a floating platform, a pillar, and a
+ * curb low enough to walk up. */
 const part level_parts[] = {
     {-4000, 1000, 0, 1000, 2000, 6000, {110, 120, 140}},     /* wall */
     {0, 300, -4000, 2000, 600, 2000, {196, 40, 28}},         /* step 1, top 0.6 */
@@ -8,6 +9,7 @@ const part level_parts[] = {
     {0, 900, -8000, 2000, 1800, 2000, {75, 151, 75}},        /* step 3, top 1.8 */
     {3500, 1650, -8000, 3000, 300, 2000, {13, 105, 172}},    /* floating platform, top 1.8 */
     {6000, 1500, -4000, 1000, 3000, 1000, {107, 50, 124}},   /* pillar */
+    {0, 150, 4000, 4000, 300, 1000, {160, 165, 170}},        /* curb, 0.3 high: step up */
 };
 const int level_part_count = sizeof level_parts / sizeof level_parts[0];
 
@@ -24,6 +26,7 @@ const mesh level_mesh = {level_verts, level_colors, LEVEL_TRIS};
 #define ZOOM_SPEED 100
 #define JUMP_SPEED 98 /* peaks about 1.15 units up after ~0.4 s */
 #define GRAVITY 4
+#define STEP_HEIGHT 400 /* ledges up to this high are walked up, not jumped */
 #define EASE 8      /* the camera closes 1/EASE of the gap each frame */
 #define TURN_EASE 4 /* players turn faster than the camera follows */
 
@@ -137,6 +140,34 @@ static const part *hit_part(const player *p)
     return 0;
 }
 
+/* Move *pos (p->x or p->z) by d. Walking into a part either steps up onto it (if
+ * grounded and it's low enough, with room above) or stops flush against its face. */
+static void move_axis(player *p, int *pos, int d, int along_x)
+{
+    if (d == 0)
+        return;
+    int old = *pos;
+    *pos = clamp(*pos + d, -PLAYER_LIMIT, PLAYER_LIMIT);
+    const part *q = hit_part(p);
+    if (!q)
+        return;
+
+    int top = q->y + q->sy / 2, old_y = p->y;
+    if (p->on_ground && top - p->y <= STEP_HEIGHT) {
+        p->y = top;
+        if (!hit_part(p))
+            return;
+        p->y = old_y;
+    }
+
+    int lo = along_x ? q->x - q->sx / 2 : q->z - q->sz / 2;
+    int hi = along_x ? q->x + q->sx / 2 : q->z + q->sz / 2;
+    *pos = d > 0 ? lo - PLAYER_RADIUS : hi + PLAYER_RADIUS;
+    /* Another part in the way, or flush would mean moving backwards: stay put. */
+    if (hit_part(p) || (d > 0 ? *pos < old : *pos > old))
+        *pos = old;
+}
+
 static player update_player(player p, input in)
 {
     /* Strafe relative to the camera: forward is away from it, along the ground. */
@@ -146,13 +177,8 @@ static player update_player(player p, input in)
     int step = right && fwd ? MOVE_SPEED * DIAGONAL / 4096 : MOVE_SPEED; /* same speed diagonally */
 
     /* One axis at a time, so walls block one direction and you slide along the other. */
-    int dx = (right * c - fwd * s) * step / 4096, dz = (-right * s - fwd * c) * step / 4096;
-    p.x = clamp(p.x + dx, -PLAYER_LIMIT, PLAYER_LIMIT);
-    if (hit_part(&p))
-        p.x -= dx;
-    p.z = clamp(p.z + dz, -PLAYER_LIMIT, PLAYER_LIMIT);
-    if (hit_part(&p))
-        p.z -= dz;
+    move_axis(&p, &p.x, (right * c - fwd * s) * step / 4096, 1);
+    move_axis(&p, &p.z, (-right * s - fwd * c) * step / 4096, 0);
 
     /* Jump from the floor or a part; gravity brings you back. */
     if ((in.buttons & JUMP) && p.on_ground)

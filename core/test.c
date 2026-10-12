@@ -54,12 +54,26 @@ int main(void)
     world air = run(w, JUMP, 0, 10);
     assert(run(air, JUMP, 0, 1).players[0].vy < air.players[0].vy);
 
-    /* Collision: the wall (x -4.5..-3.5) stops you; the side of step 1 (z -5..-3,
-     * 0.6 high) can't be walked up; jumping gets you on top; you land on tops. */
+    /* Collision: the wall (x -4.5..-3.5) stops you flush against it; step 1 (z -5..-3,
+     * 0.6 high) is too tall to walk up, so you stop flush; jumping gets you on top; you
+     * land on tops. */
     world wall = run(w, MOVE_LEFT, 0, 200);
-    assert(wall.players[0].x >= -3150 && wall.players[0].x < -3090);
+    assert(wall.players[0].x == -3500 + PLAYER_RADIUS);
     world step = run(w, MOVE_FWD, 0, 200);
-    assert(step.players[0].z >= -2650 && step.players[0].z < -2590 && step.players[0].y == 0);
+    assert(step.players[0].z == -3000 + PLAYER_RADIUS && step.players[0].y == 0);
+
+    /* The curb (z 3.5..4.5, 0.3 high) is low enough to walk up and off again. */
+    world curb = run(w, MOVE_BACK, 0, 65); /* z = 3.9: on top of it */
+    assert(curb.players[0].y == 300 && curb.players[0].on_ground);
+    curb = run(curb, MOVE_BACK, 0, 40);   /* z = 6.3: walked off the far side */
+    assert(curb.players[0].y == 0 && curb.players[0].z == 6300);
+    world high = w; /* only walks up when grounded */
+    high.players[0].z = 3100; /* front edge 3.45: one step reaches into the curb */
+    high.players[0].y = 150;
+    high.players[0].on_ground = 0;
+    high.players[0].vy = 50;
+    high = run(high, MOVE_BACK, 0, 1);
+    assert(high.players[0].z == 3500 - PLAYER_RADIUS);
     world up = run(step, MOVE_FWD | JUMP, 0, 25);
     up = run(up, 0, 0, 60);
     assert(up.players[0].on_ground && up.players[0].y == 600);

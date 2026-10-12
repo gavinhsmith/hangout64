@@ -58,7 +58,7 @@ static int load(const uint8_t *d, size_t size)
 static void test_place_loader(void)
 {
     /* The default place: 11 parts; the statue (mesh 0, untextured) and three crates
-     * (mesh 1, textured with texture 0, a 32x32 crate). */
+     * (mesh 1, textured with texture 0, a 16x16 crate). */
     assert(place_load(&pl, default_place, default_place_size) == PLACE_OK);
     assert(pl.part_count == 11 && pl.mesh_count == 2 && pl.texture_count == 1);
     assert(pl.parts[1].y == 300 && pl.parts[1].sy == 600 && pl.parts[1].mesh == -1);
@@ -70,10 +70,10 @@ static void test_place_loader(void)
         for (int a = 0; a < 2; a++)
             assert(crate->uvs[i][a] == 0 || crate->uvs[i][a] == MESH_ONE);
     const texture *tex = &pl.textures[0];
-    assert(tex->w == 32 && tex->h == 32);
-    const uint8_t *corner = tex->palette[texel(tex, 0, 0)], *nail = tex->palette[texel(tex, 2, 2)];
-    assert(corner[0] == 70 && corner[1] == 42 && corner[2] == 20);  /* dark outer edge */
-    assert(nail[0] == 210 && nail[1] == 200 && nail[2] == 180);     /* a nail */
+    assert(tex->w == 16 && tex->h == 16);
+    const uint8_t *corner = tex->palette[texel(tex, 0, 0)], *nail = tex->palette[texel(tex, 1, 1)];
+    assert(corner[0] == 104 && corner[1] == 75 && corner[2] == 28);  /* frame */
+    assert(nail[0] == 177 && nail[1] == 177 && nail[2] == 177);      /* a nail */
 
     /* Every truncation is rejected cleanly. */
     for (size_t n = 0; n < default_place_size; n++)

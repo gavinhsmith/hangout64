@@ -237,10 +237,10 @@ int main(void)
     /* Standing on a part, the camera settles at its height; a jump from there only
      * raises the camera by half the jump. */
     camera onstep = follow(camera_init(), 0, &drop.players[0], 300);
-    assert(onstep.now.y == 600);
+    assert(onstep.now.y == 600 + CAM_FOCUS);
     world hop = run(drop, JUMP, 0, 10);
     onstep = camera_update(onstep, 0, &hop.players[0]);
-    assert(onstep.target.y == 600 + (hop.players[0].y - 600) / 2);
+    assert(onstep.target.y == 600 + (hop.players[0].y - 600) / 2 + CAM_FOCUS);
 
     /* The avatar is textured with its 16x16 atlas, and every texture coordinate is on it. */
     assert(guy_mesh.texture == &guy_texture && guy_texture.w == 16 && guy_texture.h == 16);

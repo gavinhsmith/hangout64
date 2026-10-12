@@ -144,7 +144,7 @@ world world_update(world w, const input inputs[MAX_PLAYERS]);
  *   level:  as is
  *   player: translate(x, FLOOR_Y + y, z) rotateY(heading)                             */
 typedef struct {
-    int x, y, z; /* point it looks at: the ground they stand on, plus half of a jump */
+    int x, y, z; /* point it looks at: their shoulders over the ground they stand on, plus half of a jump */
     int yaw;     /* increasing moves the camera right; not wrapped */
     int pitch;   /* positive looks down from above */
     int dist;
@@ -156,6 +156,8 @@ typedef struct {
 } camera;
 
 #define CAM_PITCH_MAX 800
+#define CAM_PITCH_MIN -40 /* looking up a little; zoomed out, the camera stays a unit above the floor */
+#define CAM_FOCUS 800     /* views aren't offset by FLOOR_Y, so this looks 1.8 above the feet: the shoulders */
 #define CAM_DIST_MIN 3000
 #define CAM_DIST_MAX 12000
 

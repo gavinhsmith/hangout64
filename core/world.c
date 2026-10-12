@@ -248,7 +248,7 @@ world world_update(world w, const input inputs[MAX_PLAYERS])
 
 camera camera_init(void)
 {
-    view v = {0, 0, 0, 0, 200, 5000};
+    view v = {0, CAM_FOCUS, 0, 0, 150, 6000};
     return (camera){v, v, 0};
 }
 
@@ -259,7 +259,7 @@ camera camera_update(camera c, unsigned buttons, const player *follow)
      * frame and you still see the height. Dropping below it (walking off) counts too. */
     if (follow->on_ground || follow->y < c.ground)
         c.ground = follow->y;
-    c.target.y = c.ground + (follow->y - c.ground) / 2;
+    c.target.y = c.ground + (follow->y - c.ground) / 2 + CAM_FOCUS;
     c.target.z = follow->z;
     if (buttons & CAM_LEFT)  c.target.yaw -= ORBIT_SPEED;
     if (buttons & CAM_RIGHT) c.target.yaw += ORBIT_SPEED;
@@ -267,7 +267,7 @@ camera camera_update(camera c, unsigned buttons, const player *follow)
     if (buttons & CAM_DOWN)  c.target.pitch -= ORBIT_SPEED;
     if (buttons & CAM_IN)    c.target.dist -= ZOOM_SPEED;
     if (buttons & CAM_OUT)   c.target.dist += ZOOM_SPEED;
-    c.target.pitch = clamp(c.target.pitch, -CAM_PITCH_MAX, CAM_PITCH_MAX);
+    c.target.pitch = clamp(c.target.pitch, CAM_PITCH_MIN, CAM_PITCH_MAX);
     c.target.dist = clamp(c.target.dist, CAM_DIST_MIN, CAM_DIST_MAX);
 
     c.now.x = ease(c.now.x, c.target.x, EASE);

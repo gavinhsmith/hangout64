@@ -28,7 +28,7 @@ make        # everything
 
 - N64: ares, or a flashcart (SummerCart64, EverDrive)
 - GameCube/Wii: Dolphin; on hardware via Swiss (GC) or the Homebrew Channel / `wiiload` (Wii)
-- DS: melonDS, or a flashcart
+- DS: melonDS 1.0+, or a flashcart. DeSmuME 0.9.13 shows white screens for anything built with libnds 2 / calico.
 - 3DS: Azahar, or the Homebrew Launcher / `3dslink`
 
 ## CI

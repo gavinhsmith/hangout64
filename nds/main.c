@@ -5,6 +5,7 @@
 int main(void)
 {
     videoSetMode(MODE_0_3D);
+    videoSetModeSub(MODE_0_2D); /* blank (black) bottom screen instead of white */
     glInit();
     glClearColor(3, 3, 5, 31);
     glClearPolyID(63);

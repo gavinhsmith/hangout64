@@ -19,6 +19,13 @@ static void video_init(void)
     /* Render 320x240; the EFB copy doubles it vertically, the VI horizontally. */
     mode.fbWidth = SCREEN_W;
     mode.efbHeight = SCREEN_H;
+#ifdef HW_RVL
+    /* Wii set to 16:9: the TV stretches the picture, so narrow it 3/4 to stay 4:3. */
+    if (CONF_GetAspectRatio() == CONF_ASPECT_16_9) {
+        mode.viWidth = 480;
+        mode.viXOrigin = (VI_MAX_WIDTH_NTSC - mode.viWidth) / 2;
+    }
+#endif
     VIDEO_Configure(&mode);
 
     for (int i = 0; i < 2; i++) {

@@ -63,3 +63,4 @@ core/test_core
 *.3dsx
 *.smdh
 *.shbin
+*.lst

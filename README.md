@@ -14,16 +14,19 @@ Currently a spinning cube, rendered at 320x240 everywhere (DS: native 256x192) a
 
 ## Controls
 
-The cube spins; the camera orbits it.
+The cube spins and slides around a checkered floor; the camera eases after it. Movement
+is relative to the camera (forward = into the screen). Orbit and zoom ease too.
 
-| Platform | Orbit | Zoom in / out | Exit |
-|---|---|---|---|
-| PC | Arrows / WASD | Q / E | Esc |
-| N64 | Stick / D-pad | C-up / C-down | — |
-| GameCube | Stick / D-pad | L / R | START |
-| Wii | Wii Remote D-pad (or GC pad) | − / + | HOME |
-| DS | D-pad | L / R | START |
-| 3DS | Circle pad / D-pad | L / R | START |
+| Platform | Move | Orbit camera | Zoom in / out | Exit |
+|---|---|---|---|---|
+| PC | WASD | Arrows | Q / E | Esc |
+| N64 | Stick | D-pad | C-up / C-down | — |
+| GameCube | Stick | C-stick / D-pad | L / R | START |
+| Wii Remote | D-pad | B + D-pad | − / + | HOME |
+| DS | D-pad | Y / A / X / B | L / R | START |
+| 3DS | Circle pad | D-pad | L / R | START |
+
+On the Wii a GameCube pad works too, with the GameCube layout.
 
 ## Building
 

@@ -9,21 +9,38 @@
 #define TEX_H 256
 #define TICK_MS (1000.0 / 60.0)
 
-/* Arrows/WASD orbit, Q/E zoom in/out. */
+/* WASD moves, arrows orbit, Q/E zoom in/out. */
 static unsigned read_input(void)
 {
     const bool *k = SDL_GetKeyboardState(NULL);
     unsigned in = 0;
-    if (k[SDL_SCANCODE_LEFT] || k[SDL_SCANCODE_A])  in |= CAM_LEFT;
-    if (k[SDL_SCANCODE_RIGHT] || k[SDL_SCANCODE_D]) in |= CAM_RIGHT;
-    if (k[SDL_SCANCODE_UP] || k[SDL_SCANCODE_W])    in |= CAM_UP;
-    if (k[SDL_SCANCODE_DOWN] || k[SDL_SCANCODE_S])  in |= CAM_DOWN;
-    if (k[SDL_SCANCODE_Q])                          in |= CAM_IN;
-    if (k[SDL_SCANCODE_E])                          in |= CAM_OUT;
+    if (k[SDL_SCANCODE_A])     in |= MOVE_LEFT;
+    if (k[SDL_SCANCODE_D])     in |= MOVE_RIGHT;
+    if (k[SDL_SCANCODE_W])     in |= MOVE_FWD;
+    if (k[SDL_SCANCODE_S])     in |= MOVE_BACK;
+    if (k[SDL_SCANCODE_LEFT])  in |= CAM_LEFT;
+    if (k[SDL_SCANCODE_RIGHT]) in |= CAM_RIGHT;
+    if (k[SDL_SCANCODE_UP])    in |= CAM_UP;
+    if (k[SDL_SCANCODE_DOWN])  in |= CAM_DOWN;
+    if (k[SDL_SCANCODE_Q])     in |= CAM_IN;
+    if (k[SDL_SCANCODE_E])     in |= CAM_OUT;
     return in;
 }
 
-static void draw_scene(int angle, camera cam)
+static void draw_mesh(const mesh *m)
+{
+    glBegin(GL_QUADS);
+    for (int q = 0; q < m->quads; q++) {
+        glColor3ubv(m->colors[q]);
+        for (int c = 0; c < 4; c++) {
+            const int8_t *v = m->verts[q * 4 + c];
+            glVertex3f(v[0], v[1], v[2]);
+        }
+    }
+    glEnd();
+}
+
+static void draw_scene(const world *w)
 {
     glViewport(0, 0, SCREEN_W, SCREEN_H);
     glClearColor(0.1f, 0.1f, 0.15f, 1.0f);
@@ -36,21 +53,16 @@ static void draw_scene(int angle, camera cam)
     glFrustum(-0.1333, 0.1333, -0.1, 0.1, 0.2, 100.0);
     glMatrixMode(GL_MODELVIEW);
     glLoadIdentity();
-    glTranslatef(0.0f, 0.0f, -cam.dist / 10.0f);
-    glRotatef((float)cam.pitch, 1.0f, 0.0f, 0.0f);
-    glRotatef((float)-cam.yaw, 0.0f, 1.0f, 0.0f);
-    glRotatef((float)angle, 1.0f, 0.0f, 0.0f);
-    glRotatef((float)angle, 0.0f, 1.0f, 0.0f);
+    glTranslatef(0.0f, 0.0f, -w->cam.dist / 100.0f);
+    glRotatef(w->cam.pitch / 10.0f, 1.0f, 0.0f, 0.0f);
+    glRotatef(-w->cam.yaw / 10.0f, 0.0f, 1.0f, 0.0f);
+    glTranslatef(-w->cam.x / 100.0f, 0.0f, -w->cam.z / 100.0f);
+    draw_mesh(&floor_mesh);
 
-    glBegin(GL_QUADS);
-    for (int f = 0; f < CUBE_FACES; f++) {
-        glColor3ubv(cube_colors[f]);
-        for (int c = 0; c < 4; c++) {
-            const int8_t *v = cube_verts[f * 4 + c];
-            glVertex3f(v[0], v[1], v[2]);
-        }
-    }
-    glEnd();
+    glTranslatef(w->x / 100.0f, 0.0f, w->z / 100.0f);
+    glRotatef((float)w->spin, 1.0f, 0.0f, 0.0f);
+    glRotatef((float)w->spin, 0.0f, 1.0f, 0.0f);
+    draw_mesh(&cube_mesh);
 }
 
 /* Grab the 320x240 frame and draw it integer-scaled, centred, black bars around. */
@@ -116,8 +128,7 @@ int main(int argc, char **argv)
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
 
-    int angle = 0;
-    camera cam = CAMERA_INIT;
+    world w = world_init();
     double next = (double)SDL_GetTicks();
     for (;;) {
         SDL_Event e;
@@ -126,13 +137,12 @@ int main(int argc, char **argv)
                 (e.type == SDL_EVENT_KEY_DOWN && e.key.key == SDLK_ESCAPE))
                 goto done;
         }
-        /* Fixed 60 Hz spin regardless of monitor refresh rate. */
+        /* Fixed 60 Hz update regardless of monitor refresh rate. */
         while ((double)SDL_GetTicks() >= next) {
-            angle = cube_step(angle);
-            cam = camera_update(cam, read_input());
+            w = world_update(w, read_input());
             next += TICK_MS;
         }
-        draw_scene(angle, cam);
+        draw_scene(&w);
         present(win, tex);
     }
 done:

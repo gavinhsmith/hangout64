@@ -11,52 +11,63 @@
      GX_TRANSFER_SCALING(GX_TRANSFER_SCALE_NO))
 
 #define BG_VERTS 6
-#define CUBE_VERTS (CUBE_FACES * 6)
 
 typedef struct {
     float pos[3];
     float clr[3];
 } vertex;
 
-/* Background quad (clip space, drawn with identity matrices) then the cube as triangles. */
+static const int quad_tris[6] = {0, 1, 2, 0, 2, 3};
+
+static vertex *add_mesh(vertex *out, const mesh *m)
+{
+    for (int q = 0; q < m->quads; q++) {
+        for (int i = 0; i < 6; i++) {
+            const int8_t *v = m->verts[q * 4 + quad_tris[i]];
+            *out++ = (vertex){{v[0], v[1], v[2]},
+                              {m->colors[q][0] / 255.0f, m->colors[q][1] / 255.0f,
+                               m->colors[q][2] / 255.0f}};
+        }
+    }
+    return out;
+}
+
+/* Background quad (clip space, drawn with identity matrices), then the cube, then the
+ * floor, all as triangles. Call after world_init() so the floor exists. */
 static vertex *build_vbo(void)
 {
     static const float bg[4][2] = {{-1, -1}, {1, -1}, {1, 1}, {-1, 1}};
-    static const int quad[6] = {0, 1, 2, 0, 2, 3};
-    vertex *vbo = linearAlloc(sizeof(vertex) * (BG_VERTS + CUBE_VERTS));
+    vertex *vbo = linearAlloc(sizeof(vertex) * (BG_VERTS + (cube_mesh.quads + floor_mesh.quads) * 6));
     vertex *out = vbo;
-
     for (int i = 0; i < 6; i++)
-        *out++ = (vertex){{bg[quad[i]][0], bg[quad[i]][1], -0.5f}, {0.1f, 0.1f, 0.15f}};
-    for (int f = 0; f < CUBE_FACES; f++) {
-        for (int i = 0; i < 6; i++) {
-            const int8_t *v = cube_verts[f * 4 + quad[i]];
-            *out++ = (vertex){{v[0], v[1], v[2]},
-                              {cube_colors[f][0] / 255.0f, cube_colors[f][1] / 255.0f,
-                               cube_colors[f][2] / 255.0f}};
-        }
-    }
+        *out++ = (vertex){{bg[quad_tris[i]][0], bg[quad_tris[i]][1], -0.5f}, {0.1f, 0.1f, 0.15f}};
+    out = add_mesh(out, &cube_mesh);
+    add_mesh(out, &floor_mesh);
     return vbo;
 }
 
-/* Circle pad or D-pad orbits, L/R zoom in/out. */
+/* Circle pad moves, D-pad orbits, L/R zoom in/out. */
 static unsigned read_input(u32 keys)
 {
-    unsigned cam = 0;
-    if (keys & KEY_LEFT)  cam |= CAM_LEFT;
-    if (keys & KEY_RIGHT) cam |= CAM_RIGHT;
-    if (keys & KEY_UP)    cam |= CAM_UP;
-    if (keys & KEY_DOWN)  cam |= CAM_DOWN;
-    if (keys & KEY_L)     cam |= CAM_IN;
-    if (keys & KEY_R)     cam |= CAM_OUT;
-    return cam;
+    unsigned in = 0;
+    if (keys & KEY_CPAD_LEFT)  in |= MOVE_LEFT;
+    if (keys & KEY_CPAD_RIGHT) in |= MOVE_RIGHT;
+    if (keys & KEY_CPAD_UP)    in |= MOVE_FWD;
+    if (keys & KEY_CPAD_DOWN)  in |= MOVE_BACK;
+    if (keys & KEY_DLEFT)      in |= CAM_LEFT;
+    if (keys & KEY_DRIGHT)     in |= CAM_RIGHT;
+    if (keys & KEY_DUP)        in |= CAM_UP;
+    if (keys & KEY_DDOWN)      in |= CAM_DOWN;
+    if (keys & KEY_L)          in |= CAM_IN;
+    if (keys & KEY_R)          in |= CAM_OUT;
+    return in;
 }
 
 int main(void)
 {
     gfxInitDefault();
     consoleInit(GFX_BOTTOM, NULL);
-    printf("hangout64\n\nCircle pad: orbit\nL/R:        zoom\nSTART:      exit\n");
+    printf("hangout64\n\nCircle pad: move\nD-pad:      orbit\nL/R:        zoom\nSTART:      exit\n");
 
     C3D_Init(C3D_DEFAULT_CMDBUF_SIZE);
     /* The top screen is physically rotated: its framebuffer is 240 wide, 400 tall. */
@@ -76,6 +87,7 @@ int main(void)
     AttrInfo_AddLoader(attr, 0, GPU_FLOAT, 3);
     AttrInfo_AddLoader(attr, 1, GPU_FLOAT, 3);
 
+    world w = world_init();
     vertex *vbo = build_vbo();
     C3D_BufInfo *buf = C3D_GetBufInfo();
     BufInfo_Init(buf);
@@ -91,21 +103,23 @@ int main(void)
     Mtx_PerspTilt(&proj, C3D_AngleFromDegrees(53.0f), 4.0f / 3.0f, 0.2f, 100.0f, false);
     Mtx_Identity(&identity);
 
-    int angle = 0;
-    camera cam = CAMERA_INIT;
     while (aptMainLoop()) {
         hidScanInput();
         if (hidKeysDown() & KEY_START)
             break;
-        cam = camera_update(cam, read_input(hidKeysHeld()));
+        w = world_update(w, read_input(hidKeysHeld()));
 
-        C3D_Mtx mv;
-        Mtx_Identity(&mv);
-        Mtx_Translate(&mv, 0.0f, 0.0f, -cam.dist / 10.0f, true);
-        Mtx_RotateX(&mv, C3D_AngleFromDegrees(cam.pitch), true);
-        Mtx_RotateY(&mv, C3D_AngleFromDegrees(-cam.yaw), true);
-        Mtx_RotateX(&mv, C3D_AngleFromDegrees(angle), true);
-        Mtx_RotateY(&mv, C3D_AngleFromDegrees(angle), true);
+        /* view = translate(0, 0, -dist) rotX(pitch) rotY(-yaw) translate(-cam.x, 0, -cam.z) */
+        C3D_Mtx view, cube;
+        Mtx_Identity(&view);
+        Mtx_Translate(&view, 0.0f, 0.0f, -w.cam.dist / 100.0f, true);
+        Mtx_RotateX(&view, C3D_AngleFromDegrees(w.cam.pitch / 10.0f), true);
+        Mtx_RotateY(&view, C3D_AngleFromDegrees(-w.cam.yaw / 10.0f), true);
+        Mtx_Translate(&view, -w.cam.x / 100.0f, 0.0f, -w.cam.z / 100.0f, true);
+        Mtx_Copy(&cube, &view);
+        Mtx_Translate(&cube, w.x / 100.0f, 0.0f, w.z / 100.0f, true);
+        Mtx_RotateX(&cube, C3D_AngleFromDegrees(w.spin), true);
+        Mtx_RotateY(&cube, C3D_AngleFromDegrees(w.spin), true);
 
         C3D_FrameBegin(C3D_FRAME_SYNCDRAW);
         C3D_RenderTargetClear(top, C3D_CLEAR_ALL, 0x000000FF, 0);
@@ -120,11 +134,11 @@ int main(void)
 
         C3D_DepthTest(true, GPU_GREATER, GPU_WRITE_ALL);
         C3D_FVUnifMtx4x4(GPU_VERTEX_SHADER, u_proj, &proj);
-        C3D_FVUnifMtx4x4(GPU_VERTEX_SHADER, u_mv, &mv);
-        C3D_DrawArrays(GPU_TRIANGLES, BG_VERTS, CUBE_VERTS);
+        C3D_FVUnifMtx4x4(GPU_VERTEX_SHADER, u_mv, &cube);
+        C3D_DrawArrays(GPU_TRIANGLES, BG_VERTS, cube_mesh.quads * 6);
+        C3D_FVUnifMtx4x4(GPU_VERTEX_SHADER, u_mv, &view);
+        C3D_DrawArrays(GPU_TRIANGLES, BG_VERTS + cube_mesh.quads * 6, floor_mesh.quads * 6);
         C3D_FrameEnd(0);
-
-        angle = cube_step(angle);
     }
 
     linearFree(vbo);

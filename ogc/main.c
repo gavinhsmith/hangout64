@@ -81,8 +81,22 @@ static void video_init(void)
     clear_scene_area();
 }
 
+static void draw_mesh(const mesh *m, Mtx mv)
+{
+    GX_LoadPosMtxImm(mv, GX_PNMTX0);
+    GX_Begin(GX_QUADS, GX_VTXFMT0, m->quads * 4);
+    for (int q = 0; q < m->quads; q++) {
+        for (int c = 0; c < 4; c++) {
+            const int8_t *v = m->verts[q * 4 + c];
+            GX_Position3s8(v[0], v[1], v[2]);
+            GX_Color3u8(m->colors[q][0], m->colors[q][1], m->colors[q][2]);
+        }
+    }
+    GX_End();
+}
+
 /* Pass 1: the 3D scene into the top-left 320x240 of the EFB. */
-static void draw_scene(int angle, camera cam)
+static void draw_scene(const world *w)
 {
     GX_SetViewport(0, 0, SCREEN_W, SCREEN_H, 0, 1);
     GX_SetScissor(0, 0, SCREEN_W, SCREEN_H);
@@ -99,26 +113,23 @@ static void draw_scene(int angle, camera cam)
     GX_SetTevOp(GX_TEVSTAGE0, GX_PASSCLR);
     GX_SetZMode(GX_TRUE, GX_LEQUAL, GX_TRUE);
 
-    Mtx rx, ry, model, view, mv;
-    guMtxRotDeg(rx, 'x', (f32)angle);
-    guMtxRotDeg(ry, 'y', (f32)angle);
-    guMtxConcat(rx, ry, model);
-    guMtxRotDeg(rx, 'x', (f32)cam.pitch);
-    guMtxRotDeg(ry, 'y', (f32)-cam.yaw);
-    guMtxConcat(rx, ry, view);
-    guMtxConcat(view, model, mv);
-    guMtxTransApply(mv, mv, 0.0f, 0.0f, -cam.dist / 10.0f);
-    GX_LoadPosMtxImm(mv, GX_PNMTX0);
+    /* view = translate(0, 0, -dist) rotX(pitch) rotY(-yaw) translate(-cam.x, 0, -cam.z) */
+    Mtx rx, ry, t, rot, view, model, mv;
+    guMtxRotDeg(rx, 'x', w->cam.pitch / 10.0f);
+    guMtxRotDeg(ry, 'y', -w->cam.yaw / 10.0f);
+    guMtxConcat(rx, ry, rot);
+    guMtxTrans(t, -w->cam.x / 100.0f, 0.0f, -w->cam.z / 100.0f);
+    guMtxConcat(rot, t, view);
+    guMtxTransApply(view, view, 0.0f, 0.0f, -w->cam.dist / 100.0f);
+    draw_mesh(&floor_mesh, view);
 
-    GX_Begin(GX_QUADS, GX_VTXFMT0, CUBE_FACES * 4);
-    for (int f = 0; f < CUBE_FACES; f++) {
-        for (int c = 0; c < 4; c++) {
-            const int8_t *v = cube_verts[f * 4 + c];
-            GX_Position3s8(v[0], v[1], v[2]);
-            GX_Color3u8(cube_colors[f][0], cube_colors[f][1], cube_colors[f][2]);
-        }
-    }
-    GX_End();
+    /* cube = translate(x, 0, z) rotX(spin) rotY(spin) */
+    guMtxRotDeg(rx, 'x', (f32)w->spin);
+    guMtxRotDeg(ry, 'y', (f32)w->spin);
+    guMtxConcat(rx, ry, rot);
+    guMtxTransApply(rot, model, w->x / 100.0f, 0.0f, w->z / 100.0f);
+    guMtxConcat(view, model, mv);
+    draw_mesh(&cube_mesh, mv);
 }
 
 /* Pass 2: copy the 320x240 frame to a texture and draw it over the whole EFB with
@@ -173,34 +184,39 @@ static void on_wiimote_power(s32 chan) { (void)chan; power_pressed = 1; }
 
 #define STICK_DEADZONE 32
 
-/* GC pad: stick or D-pad orbits, L/R zoom in/out. Wii Remote: D-pad orbits, -/+ zoom.
- * START / HOME sets *quit. */
+/* GC pad: stick moves, C-stick or D-pad orbits, L/R zoom in/out.
+ * Wii Remote: D-pad moves, B + D-pad orbits, -/+ zoom. START / HOME sets *quit. */
 static unsigned read_input(int *quit)
 {
     PAD_ScanPads();
     u16 b = PAD_ButtonsHeld(0);
-    s8 x = PAD_StickX(0), y = PAD_StickY(0);
-    unsigned cam = 0;
-    if ((b & PAD_BUTTON_LEFT) || x < -STICK_DEADZONE)  cam |= CAM_LEFT;
-    if ((b & PAD_BUTTON_RIGHT) || x > STICK_DEADZONE)  cam |= CAM_RIGHT;
-    if ((b & PAD_BUTTON_UP) || y > STICK_DEADZONE)     cam |= CAM_UP;
-    if ((b & PAD_BUTTON_DOWN) || y < -STICK_DEADZONE)  cam |= CAM_DOWN;
-    if (b & PAD_TRIGGER_L)                             cam |= CAM_IN;
-    if (b & PAD_TRIGGER_R)                             cam |= CAM_OUT;
+    s8 x = PAD_StickX(0), y = PAD_StickY(0), cx = PAD_SubStickX(0), cy = PAD_SubStickY(0);
+    unsigned in = 0;
+    if (x < -STICK_DEADZONE) in |= MOVE_LEFT;
+    if (x > STICK_DEADZONE)  in |= MOVE_RIGHT;
+    if (y > STICK_DEADZONE)  in |= MOVE_FWD;
+    if (y < -STICK_DEADZONE) in |= MOVE_BACK;
+    if ((b & PAD_BUTTON_LEFT) || cx < -STICK_DEADZONE)  in |= CAM_LEFT;
+    if ((b & PAD_BUTTON_RIGHT) || cx > STICK_DEADZONE)  in |= CAM_RIGHT;
+    if ((b & PAD_BUTTON_UP) || cy > STICK_DEADZONE)     in |= CAM_UP;
+    if ((b & PAD_BUTTON_DOWN) || cy < -STICK_DEADZONE)  in |= CAM_DOWN;
+    if (b & PAD_TRIGGER_L) in |= CAM_IN;
+    if (b & PAD_TRIGGER_R) in |= CAM_OUT;
     *quit = (PAD_ButtonsDown(0) & PAD_BUTTON_START) != 0;
 #ifdef HW_RVL
     WPAD_ScanPads();
     u32 w = WPAD_ButtonsHeld(0);
-    if (w & WPAD_BUTTON_LEFT)  cam |= CAM_LEFT;
-    if (w & WPAD_BUTTON_RIGHT) cam |= CAM_RIGHT;
-    if (w & WPAD_BUTTON_UP)    cam |= CAM_UP;
-    if (w & WPAD_BUTTON_DOWN)  cam |= CAM_DOWN;
-    if (w & WPAD_BUTTON_MINUS) cam |= CAM_IN;
-    if (w & WPAD_BUTTON_PLUS)  cam |= CAM_OUT;
+    int orbit = (w & WPAD_BUTTON_B) != 0;
+    if (w & WPAD_BUTTON_LEFT)  in |= orbit ? CAM_LEFT : MOVE_LEFT;
+    if (w & WPAD_BUTTON_RIGHT) in |= orbit ? CAM_RIGHT : MOVE_RIGHT;
+    if (w & WPAD_BUTTON_UP)    in |= orbit ? CAM_UP : MOVE_FWD;
+    if (w & WPAD_BUTTON_DOWN)  in |= orbit ? CAM_DOWN : MOVE_BACK;
+    if (w & WPAD_BUTTON_MINUS) in |= CAM_IN;
+    if (w & WPAD_BUTTON_PLUS)  in |= CAM_OUT;
     if ((WPAD_ButtonsDown(0) & WPAD_BUTTON_HOME) || power_pressed)
         *quit = 1;
 #endif
-    return cam;
+    return in;
 }
 
 int main(void)
@@ -213,10 +229,10 @@ int main(void)
     WPAD_SetPowerButtonCallback(on_wiimote_power);
 #endif
 
-    int angle = 0, fb = 0, quit = 0;
-    camera cam = CAMERA_INIT;
+    int fb = 0, quit = 0;
+    world w = world_init();
     while (!quit) {
-        draw_scene(angle, cam);
+        draw_scene(&w);
         draw_upscaled();
 
         GX_DrawDone();
@@ -227,8 +243,7 @@ int main(void)
         VIDEO_SetNextFramebuffer(xfb[fb]);
         VIDEO_Flush();
         VIDEO_WaitVSync();
-        angle = cube_step(angle);
-        cam = camera_update(cam, read_input(&quit));
+        w = world_update(w, read_input(&quit));
     }
 #ifdef HW_RVL
     if (power_pressed)

@@ -67,6 +67,7 @@ static unsigned read_input(void)
     if (b.c_up)    bits |= CAM_IN;
     if (b.c_down)  bits |= CAM_OUT;
     if (b.a)       bits |= JUMP;
+    if (b.b)       bits |= RUN;
     return bits;
 }
 
@@ -150,7 +151,7 @@ int main(void)
         for (int i = 0; i < w.player_count; i++) {
             const player *p = &w.players[i];
             glPushMatrix();
-            glTranslatef(p->x / 1000.0f, FLOOR_Y + p->y / 1000.0f, p->z / 1000.0f);
+            glTranslatef(p->x / 1000.0f, FLOOR_Y + (p->y + player_bob(p)) / 1000.0f, p->z / 1000.0f);
             glRotatef(p->heading / 10.0f, 0.0f, 1.0f, 0.0f);
             bind_texture(&avatar_meshes[i]);
             glCallList(guy_list);

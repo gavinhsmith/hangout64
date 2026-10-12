@@ -33,7 +33,7 @@ static void upload_textures(void)
     glBindTexture(0, 0);
 }
 
-/* D-pad moves, A jumps, R + D-pad orbits, X/Y zoom in/out. */
+/* D-pad moves, A jumps, B runs, R + D-pad orbits, X/Y zoom in/out. */
 static unsigned read_input(u32 keys)
 {
     unsigned in = 0;
@@ -43,6 +43,7 @@ static unsigned read_input(u32 keys)
     if (keys & KEY_UP)    in |= orbit ? CAM_UP : MOVE_FWD;
     if (keys & KEY_DOWN)  in |= orbit ? CAM_DOWN : MOVE_BACK;
     if (keys & KEY_A)     in |= JUMP;
+    if (keys & KEY_B)     in |= RUN;
     if (keys & KEY_X)     in |= CAM_IN;
     if (keys & KEY_Y)     in |= CAM_OUT;
     return in;
@@ -90,7 +91,7 @@ int main(void)
 {
     videoSetMode(MODE_0_3D);
     consoleDemoInit(); /* text console on the bottom screen */
-    printf("hangout64\n\nD-pad:     move\nA:         jump\nR + D-pad: orbit\nX/Y:       zoom\nSTART:     exit\n");
+    printf("hangout64\n\nD-pad:     move\nA:         jump\nB:         run\nR + D-pad: orbit\nX/Y:       zoom\nSTART:     exit\n");
     glInit();
     glClearColor(3, 3, 5, 31);
     glClearPolyID(63);
@@ -138,7 +139,7 @@ int main(void)
         for (int i = 0; i < w.player_count; i++) {
             const player *p = &w.players[i];
             glPushMatrix();
-            glTranslatef32(f32m(p->x), inttof32(FLOOR_Y) + f32m(p->y), f32m(p->z));
+            glTranslatef32(f32m(p->x), inttof32(FLOOR_Y) + f32m(p->y + player_bob(p)), f32m(p->z));
             glRotateYi(angle(p->heading));
             draw_mesh(&avatar_meshes[i]);
             glPopMatrix(1);

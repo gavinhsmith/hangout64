@@ -116,7 +116,7 @@ static vertex *build_vbo(void)
     return vbo;
 }
 
-/* Circle pad moves, A jumps, D-pad orbits, L/R zoom in/out. */
+/* Circle pad moves, A jumps, B runs, D-pad orbits, L/R zoom in/out. */
 static unsigned read_input(u32 keys)
 {
     unsigned in = 0;
@@ -131,6 +131,7 @@ static unsigned read_input(u32 keys)
     if (keys & KEY_L)          in |= CAM_IN;
     if (keys & KEY_R)          in |= CAM_OUT;
     if (keys & KEY_A)          in |= JUMP;
+    if (keys & KEY_B)          in |= RUN;
     return in;
 }
 
@@ -138,7 +139,7 @@ int main(void)
 {
     gfxInitDefault();
     consoleInit(GFX_BOTTOM, NULL);
-    printf("hangout64\n\nCircle pad: move\nA:          jump\nD-pad:      orbit\nL/R:        zoom\nSTART:      exit\n");
+    printf("hangout64\n\nCircle pad: move\nA:          jump\nB:          run\nD-pad:      orbit\nL/R:        zoom\nSTART:      exit\n");
 
     C3D_Init(C3D_DEFAULT_CMDBUF_SIZE);
     /* The top screen is physically rotated: its framebuffer is 240 wide, 400 tall. */
@@ -213,7 +214,7 @@ int main(void)
             const player *p = &w.players[i];
             C3D_Mtx m;
             Mtx_Copy(&m, &view);
-            Mtx_Translate(&m, p->x / 1000.0f, FLOOR_Y + p->y / 1000.0f, p->z / 1000.0f, true);
+            Mtx_Translate(&m, p->x / 1000.0f, FLOOR_Y + (p->y + player_bob(p)) / 1000.0f, p->z / 1000.0f, true);
             Mtx_RotateY(&m, C3D_AngleFromDegrees(p->heading / 10.0f), true);
             C3D_FVUnifMtx4x4(GPU_VERTEX_SHADER, u_mv, &m);
             set_texture(avatar_meshes[i].texture);

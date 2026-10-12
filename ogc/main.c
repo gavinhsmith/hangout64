@@ -203,7 +203,7 @@ static void draw_scene(const world *w, const view *v)
     for (int i = 0; i < w->player_count; i++) {
         const player *p = &w->players[i];
         guMtxRotDeg(ry, 'y', p->heading / 10.0f);
-        guMtxTransApply(ry, model, p->x / 1000.0f, FLOOR_Y + p->y / 1000.0f, p->z / 1000.0f);
+        guMtxTransApply(ry, model, p->x / 1000.0f, FLOOR_Y + (p->y + player_bob(p)) / 1000.0f, p->z / 1000.0f);
         guMtxConcat(view, model, mv);
         draw_mesh(&avatar_meshes[i], mv);
     }
@@ -280,6 +280,7 @@ static unsigned read_input(int *quit)
     if (b & PAD_TRIGGER_L) in |= CAM_IN;
     if (b & PAD_TRIGGER_R) in |= CAM_OUT;
     if (b & PAD_BUTTON_A)  in |= JUMP;
+    if (b & PAD_BUTTON_B)  in |= RUN;
     *quit = (PAD_ButtonsDown(0) & PAD_BUTTON_START) != 0;
 #ifdef HW_RVL
     WPAD_ScanPads();
@@ -292,6 +293,7 @@ static unsigned read_input(int *quit)
     if (w & WPAD_BUTTON_MINUS) in |= CAM_IN;
     if (w & WPAD_BUTTON_PLUS)  in |= CAM_OUT;
     if (w & WPAD_BUTTON_A)     in |= JUMP;
+    if (w & WPAD_BUTTON_1)     in |= RUN;
     if ((WPAD_ButtonsDown(0) & WPAD_BUTTON_HOME) || power_pressed)
         *quit = 1;
 #endif

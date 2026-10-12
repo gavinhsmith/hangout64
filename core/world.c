@@ -9,6 +9,9 @@ static uint8_t level_colors[PLACE_MAX_TRIS][3];
 mesh level_mesh = {.verts = level_verts, .colors = level_colors};
 
 #define MOVE_SPEED 60 /* thousandths of a unit per frame */
+#define RUN_SPEED 110
+#define RUN_STEP 20   /* frames per running step: one hop each */
+#define RUN_BOB 150   /* height of a hop */
 #define DIAGONAL 2896 /* 1/sqrt(2), scaled by 4096 */
 #define ORBIT_SPEED 20
 #define ZOOM_SPEED 100
@@ -196,9 +199,11 @@ static player update_player(player p, input in)
     int right = !!(in.buttons & MOVE_RIGHT) - !!(in.buttons & MOVE_LEFT);
     int fwd = !!(in.buttons & MOVE_FWD) - !!(in.buttons & MOVE_BACK);
     int s = isin(in.yaw / 10), c = icos(in.yaw / 10);
-    int step = right && fwd ? MOVE_SPEED * DIAGONAL / 4096 : MOVE_SPEED; /* same speed diagonally */
+    int speed = in.buttons & RUN ? RUN_SPEED : MOVE_SPEED;
+    int step = right && fwd ? speed * DIAGONAL / 4096 : speed; /* same speed diagonally */
 
     /* One axis at a time, so walls block one direction and you slide along the other. */
+    int old_x = p.x, old_z = p.z;
     move_axis(&p, &p.x, (right * c - fwd * s) * step / 4096, 1);
     move_axis(&p, &p.z, (-right * s - fwd * c) * step / 4096, 0);
 
@@ -225,6 +230,11 @@ static player update_player(player p, input in)
         p.on_ground = 1;
     }
 
+    /* Two steps make a cycle; restart from the ground whenever they stop running
+     * (or run into a wall). */
+    int moved = p.x != old_x || p.z != old_z;
+    p.stride = (in.buttons & RUN) && moved && p.on_ground ? p.stride % (2 * RUN_STEP) + 1 : 0;
+
     /* Face the way you're moving: the camera's yaw plus the stick direction
      * (forward 0, left +90, right -90, back 180; diagonals in between). */
     if (right || fwd) {
@@ -240,6 +250,11 @@ static player update_player(player p, input in)
     int turn = wrap3600(p.target_heading - p.heading + 1800) - 1800;
     p.heading = wrap3600(p.heading + ease(0, turn, TURN_EASE));
     return p;
+}
+
+int player_bob(const player *p)
+{
+    return abs(isin(p->stride * 180 / RUN_STEP)) * RUN_BOB / 4096;
 }
 
 world world_update(world w, const input inputs[MAX_PLAYERS])

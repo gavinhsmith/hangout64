@@ -19,14 +19,14 @@ eases after him. Movement is relative to the camera (forward = into the screen).
 zoom ease too. Walk one way for a moment and the camera slowly swings round behind him
 (except when he's walking toward it).
 
-| Platform | Move | Jump | Orbit camera | Zoom in / out | Exit |
-|---|---|---|---|---|---|
-| PC | WASD | Space | Arrows | Q / E | Esc |
-| N64 | Stick | A | D-pad | C-up / C-down | — |
-| GameCube | Stick | A | C-stick / D-pad | L / R | START |
-| Wii Remote | D-pad | A | B + D-pad | − / + | HOME |
-| DS | D-pad | A | R + D-pad | X / Y | START |
-| 3DS | Circle pad | A | D-pad | L / R | START |
+| Platform | Move | Jump | Run | Orbit camera | Zoom in / out | Exit |
+|---|---|---|---|---|---|---|
+| PC | WASD | Space | Shift | Arrows | Q / E | Esc |
+| N64 | Stick | A | B | D-pad | C-up / C-down | — |
+| GameCube | Stick | A | B | C-stick / D-pad | L / R | START |
+| Wii Remote | D-pad | A | 1 | B + D-pad | − / + | HOME |
+| DS | D-pad | A | B | R + D-pad | X / Y | START |
+| 3DS | Circle pad | A | B | D-pad | L / R | START |
 
 On the Wii a GameCube pad works too, with the GameCube layout.
 

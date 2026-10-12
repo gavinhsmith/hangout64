@@ -234,6 +234,15 @@ int main(void)
     o = follow(o, CAM_UP | CAM_IN, p0, 300);
     assert(o.now.pitch == CAM_PITCH_MAX && o.now.dist == CAM_DIST_MIN);
 
+    /* Running is faster than walking and hops each step, back down between steps;
+     * walking doesn't hop. */
+    world walked = run(w, MOVE_RIGHT, 0, 30), ran = run(w, MOVE_RIGHT | RUN, 0, 30);
+    assert(ran.players[0].x - p0->x > (walked.players[0].x - p0->x) * 3 / 2);
+    assert(player_bob(&walked.players[0]) == 0);
+    world mid = run(w, MOVE_RIGHT | RUN, 0, 10), land = run(w, MOVE_RIGHT | RUN, 0, 20);
+    assert(player_bob(&mid.players[0]) == 150 && player_bob(&land.players[0]) == 0);
+    assert(player_bob(&run(ran, RUN, 0, 1).players[0]) == 0); /* stopped */
+
     /* Walking one way: nothing for a moment, then the camera slowly swings behind,
      * until it's there. Walking toward it never turns it. */
     world walk = w;

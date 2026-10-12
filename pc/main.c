@@ -54,6 +54,7 @@ static unsigned read_input(void)
     if (k[SDL_SCANCODE_Q])     in |= CAM_IN;
     if (k[SDL_SCANCODE_E])     in |= CAM_OUT;
     if (k[SDL_SCANCODE_SPACE]) in |= JUMP;
+    if (k[SDL_SCANCODE_LSHIFT] || k[SDL_SCANCODE_RSHIFT]) in |= RUN;
     return in;
 }
 
@@ -112,7 +113,7 @@ static void draw_scene(const world *w, const view *v)
     for (int i = 0; i < w->player_count; i++) {
         const player *p = &w->players[i];
         glPushMatrix();
-        glTranslatef(p->x / 1000.0f, FLOOR_Y + p->y / 1000.0f, p->z / 1000.0f);
+        glTranslatef(p->x / 1000.0f, FLOOR_Y + (p->y + player_bob(p)) / 1000.0f, p->z / 1000.0f);
         glRotatef(p->heading / 10.0f, 0.0f, 1.0f, 0.0f);
         draw_mesh(&avatar_meshes[i]);
         glPopMatrix();

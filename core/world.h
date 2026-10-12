@@ -93,7 +93,7 @@ extern const unsigned default_place_size;
 enum {
     MOVE_LEFT = 1 << 0, MOVE_RIGHT = 1 << 1, MOVE_FWD = 1 << 2, MOVE_BACK = 1 << 3,
     CAM_LEFT = 1 << 4, CAM_RIGHT = 1 << 5, CAM_UP = 1 << 6, CAM_DOWN = 1 << 7,
-    CAM_IN = 1 << 8, CAM_OUT = 1 << 9, JUMP = 1 << 10,
+    CAM_IN = 1 << 8, CAM_OUT = 1 << 9, JUMP = 1 << 10, RUN = 1 << 11,
 };
 
 /* One player's input for a frame: buttons plus the yaw of the camera they're looking
@@ -112,6 +112,7 @@ typedef struct {
     int on_ground;
     int heading;   /* 0..3599; 0 faces -Z, turns toward where it moves */
     int target_heading;
+    int stride;    /* frames into the running cycle while running on the ground, else 0 */
     uint8_t coat[3];
 } player;
 
@@ -135,6 +136,10 @@ extern texture avatar_textures[MAX_PLAYERS];
 extern mesh avatar_meshes[MAX_PLAYERS];
 void avatar_build(int i, const uint8_t coat[3]);
 
+/* How far to draw a player above their feet (thousandths): a little hop each running
+ * step. Only for drawing; collision uses y. */
+int player_bob(const player *p);
+
 /* Advance one frame; inputs[i] drives players[i]. */
 world world_update(world w, const input inputs[MAX_PLAYERS]);
 
@@ -143,7 +148,7 @@ world world_update(world w, const input inputs[MAX_PLAYERS]);
  * it slowly swings round behind them (not when they walk toward it). Platforms render with:
  *   view:   translate(0, 0, -dist) rotateX(pitch) rotateY(-yaw) translate(-x, -y, -z)
  *   level:  as is
- *   player: translate(x, FLOOR_Y + y, z) rotateY(heading)                             */
+ *   player: translate(x, FLOOR_Y + y + player_bob, z) rotateY(heading)                */
 typedef struct {
     int x, y, z; /* point it looks at: their shoulders over the ground they stand on, plus half of a jump */
     int yaw;     /* increasing moves the camera right; not wrapped */

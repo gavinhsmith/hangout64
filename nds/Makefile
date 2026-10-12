@@ -16,7 +16,7 @@ TARGET  := hangout64
 BUILD   := build
 OBJS    := $(BUILD)/main.o $(BUILD)/world.o $(BUILD)/guy_mesh.o
 ARCH    := -march=armv5te -mtune=arm946e-s
-CFLAGS  := -O2 -Wall $(ARCH) -DARM9 $(_EXTRADEFS) -I$(LIBNDS)/include -I../core
+CFLAGS  := -O2 -Wall $(ARCH) -DARM9 $(_EXTRADEFS) -I$(LIBNDS)/include -I../core -MMD -MP
 # ds_rules' %.elf rule links these, adding calico's specs and runtime.
 LD       := $(CC)
 OFILES   := $(OBJS)
@@ -42,3 +42,6 @@ clean:
 	rm -rf $(BUILD) *.elf *.nds *.lst
 
 .PHONY: all clean
+
+# Header dependencies from -MMD, so changing core/world.h rebuilds everything that uses it.
+-include $(OBJS:.o=.d)

@@ -8,7 +8,7 @@ TARGET  := hangout64
 BUILD   := build
 OBJS    := $(BUILD)/vshader.shbin.o $(BUILD)/main.o $(BUILD)/world.o $(BUILD)/guy_mesh.o
 ARCH    := -march=armv6k -mtune=mpcore -mfloat-abi=hard -mtp=soft
-CFLAGS  := -O2 -Wall $(ARCH) -D__3DS__ -I$(CTRULIB)/include -I../core -I$(BUILD)
+CFLAGS  := -O2 -Wall $(ARCH) -D__3DS__ -I$(CTRULIB)/include -I../core -MMD -MP -I$(BUILD)
 LDFLAGS := -specs=3dsx.specs $(ARCH)
 LIBS    := -L$(CTRULIB)/lib -lcitro3d -lctru -lm
 
@@ -43,3 +43,6 @@ clean:
 	rm -rf $(BUILD) *.3dsx
 
 .PHONY: all clean
+
+# Header dependencies from -MMD, so changing core/world.h rebuilds everything that uses it.
+-include $(OBJS:.o=.d)

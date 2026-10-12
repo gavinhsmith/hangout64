@@ -21,7 +21,7 @@ include $(DEVKITPPC)/$(PLATFORM)_rules
 TARGET := hangout64_$(PLATFORM)
 BUILD  := build/$(PLATFORM)
 OBJS   := $(BUILD)/main.o $(BUILD)/world.o $(BUILD)/guy_mesh.o
-CFLAGS := -O2 -Wall $(MACHDEP) -I$(LIBOGC_INC) -I../core
+CFLAGS := -O2 -Wall $(MACHDEP) -I$(LIBOGC_INC) -I../core -MMD -MP
 LIBS   := -L$(LIBOGC_LIB) $(if $(filter wii,$(PLATFORM)),-lwiiuse -lbte) -logc -lm
 
 .DEFAULT_GOAL := $(TARGET).dol
@@ -41,5 +41,8 @@ $(BUILD)/%.o: ../core/%.c | $(BUILD)
 
 $(BUILD):
 	mkdir -p $@
+
+# Header dependencies from -MMD, so changing core/world.h rebuilds everything that uses it.
+-include $(OBJS:.o=.d)
 
 endif

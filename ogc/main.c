@@ -163,6 +163,14 @@ static void draw_upscaled(void)
     GX_End();
 }
 
+#ifdef HW_RVL
+/* Power button on the console or a Wii Remote. Dolphin's Stop presses it too and
+ * waits for the program to shut down. */
+static volatile int power_pressed;
+static void on_power(void) { power_pressed = 1; }
+static void on_wiimote_power(s32 chan) { (void)chan; power_pressed = 1; }
+#endif
+
 #define STICK_DEADZONE 32
 
 /* GC pad: stick or D-pad orbits, L/R zoom in/out. Wii Remote: D-pad orbits, -/+ zoom.
@@ -189,7 +197,7 @@ static unsigned read_input(int *quit)
     if (w & WPAD_BUTTON_DOWN)  cam |= CAM_DOWN;
     if (w & WPAD_BUTTON_MINUS) cam |= CAM_IN;
     if (w & WPAD_BUTTON_PLUS)  cam |= CAM_OUT;
-    if (WPAD_ButtonsDown(0) & WPAD_BUTTON_HOME)
+    if ((WPAD_ButtonsDown(0) & WPAD_BUTTON_HOME) || power_pressed)
         *quit = 1;
 #endif
     return cam;
@@ -201,6 +209,8 @@ int main(void)
     PAD_Init();
 #ifdef HW_RVL
     WPAD_Init();
+    SYS_SetPowerCallback(on_power);
+    WPAD_SetPowerButtonCallback(on_wiimote_power);
 #endif
 
     int angle = 0, fb = 0, quit = 0;
@@ -220,5 +230,9 @@ int main(void)
         angle = cube_step(angle);
         cam = camera_update(cam, read_input(&quit));
     }
+#ifdef HW_RVL
+    if (power_pressed)
+        SYS_ResetSystem(SYS_POWEROFF, 0, 0);
+#endif
     exit(0);
 }

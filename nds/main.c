@@ -1,11 +1,13 @@
 #include <nds.h>
+#include <stdio.h>
 #include "cube.h"
 
 /* The DS renders at its native 256x192 (still 4:3, so same camera). */
 int main(void)
 {
     videoSetMode(MODE_0_3D);
-    videoSetModeSub(MODE_0_2D); /* blank (black) bottom screen instead of white */
+    consoleDemoInit(); /* text console on the bottom screen */
+    printf("hangout64\n\nPress START to exit.\n");
     glInit();
     glClearColor(3, 3, 5, 31);
     glClearPolyID(63);

@@ -6,6 +6,11 @@ IMAGE_3ds := devkitpro/devkitarm:latest
 
 CONSOLES := n64 ogc nds 3ds
 
+# Keep the N64 toolchain (with libdragon installed into it) in a named volume, so
+# libdragon is only built once. `make n64-reset` drops it, e.g. after an image update.
+N64_VOLUME := hangout64-n64-toolchain
+DOCKER_ARGS_n64 := -v $(N64_VOLUME):/n64_toolchain
+
 # Stop Git Bash on Windows rewriting the container paths (/src/...) into Windows paths.
 export MSYS_NO_PATHCONV := 1
 
@@ -19,10 +24,13 @@ pc:
 	cmake --build build/pc
 
 $(CONSOLES):
-	docker run --rm -v "$(CURDIR):/src" -w /src/$@ $(IMAGE_$@) make
+	docker run --rm $(DOCKER_ARGS_$@) -v "$(CURDIR):/src" -w /src/$@ $(IMAGE_$@) make
 
 clean:
 	rm -rf build core/test_core
-	$(foreach c,$(CONSOLES),docker run --rm -v "$(CURDIR):/src" -w /src/$(c) $(IMAGE_$(c)) make clean;)
+	$(foreach c,$(CONSOLES),docker run --rm $(DOCKER_ARGS_$(c)) -v "$(CURDIR):/src" -w /src/$(c) $(IMAGE_$(c)) make clean;)
 
-.PHONY: all test pc clean $(CONSOLES)
+n64-reset:
+	docker volume rm $(N64_VOLUME)
+
+.PHONY: all test pc clean n64-reset $(CONSOLES)

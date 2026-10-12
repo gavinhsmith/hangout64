@@ -1,6 +1,6 @@
 #include <nds.h>
 #include <stdio.h>
-#include "cube.h"
+#include "world.h"
 
 /* D-pad moves, A/B/X/Y orbit, L/R zoom in/out. */
 static unsigned read_input(u32 keys)
@@ -31,18 +31,18 @@ static int f32h(int hundredths)
     return hundredths * 4096 / 100;
 }
 
-/* v16 vertices only reach +/-8, the floor needs +/-10: send half-size vertices
- * and scale the matrix by 2. */
+/* v16 is 4.12 and only reaches +/-8, the floor needs +/-10: send half-size
+ * vertices (8.8 -> 4.12 is *16, halved is *8) and scale the matrix by 2. */
 static void draw_mesh(const mesh *m)
 {
     glPushMatrix();
     glScalef32(inttof32(2), inttof32(2), inttof32(2));
-    glBegin(GL_QUADS);
-    for (int q = 0; q < m->quads; q++) {
-        glColor3b(m->colors[q][0], m->colors[q][1], m->colors[q][2]);
-        for (int c = 0; c < 4; c++) {
-            const int8_t *v = m->verts[q * 4 + c];
-            glVertex3v16(v[0] * 2048, v[1] * 2048, v[2] * 2048);
+    glBegin(GL_TRIANGLES);
+    for (int t = 0; t < m->tris; t++) {
+        glColor3b(m->colors[t][0], m->colors[t][1], m->colors[t][2]);
+        for (int c = 0; c < 3; c++) {
+            const int16_t *v = m->verts[t * 3 + c];
+            glVertex3v16(v[0] * 8, v[1] * 8, v[2] * 8);
         }
     }
     glEnd();
@@ -80,10 +80,9 @@ int main(void)
         glTranslatef32(-f32h(w.cam.x), 0, -f32h(w.cam.z));
         draw_mesh(&floor_mesh);
 
-        glTranslatef32(f32h(w.x), 0, f32h(w.z));
-        glRotateXi(angle(w.spin * 10));
-        glRotateYi(angle(w.spin * 10));
-        draw_mesh(&cube_mesh);
+        glTranslatef32(f32h(w.x), inttof32(FLOOR_Y), f32h(w.z));
+        glRotateYi(angle(w.heading));
+        draw_mesh(&guy_mesh);
 
         glFlush(0);
         swiWaitForVBlank();

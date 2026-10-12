@@ -1,7 +1,7 @@
 #include <3ds.h>
 #include <citro3d.h>
 #include <stdio.h>
-#include "cube.h"
+#include "world.h"
 #include "vshader_shbin.h"
 
 #define DISPLAY_TRANSFER_FLAGS                                                   \
@@ -21,27 +21,28 @@ static const int quad_tris[6] = {0, 1, 2, 0, 2, 3};
 
 static vertex *add_mesh(vertex *out, const mesh *m)
 {
-    for (int q = 0; q < m->quads; q++) {
-        for (int i = 0; i < 6; i++) {
-            const int8_t *v = m->verts[q * 4 + quad_tris[i]];
-            *out++ = (vertex){{v[0], v[1], v[2]},
-                              {m->colors[q][0] / 255.0f, m->colors[q][1] / 255.0f,
-                               m->colors[q][2] / 255.0f}};
+    const float k = 1.0f / MESH_ONE;
+    for (int t = 0; t < m->tris; t++) {
+        for (int c = 0; c < 3; c++) {
+            const int16_t *v = m->verts[t * 3 + c];
+            *out++ = (vertex){{v[0] * k, v[1] * k, v[2] * k},
+                              {m->colors[t][0] / 255.0f, m->colors[t][1] / 255.0f,
+                               m->colors[t][2] / 255.0f}};
         }
     }
     return out;
 }
 
-/* Background quad (clip space, drawn with identity matrices), then the cube, then the
+/* Background quad (clip space, drawn with identity matrices), then the guy, then the
  * floor, all as triangles. Call after world_init() so the floor exists. */
 static vertex *build_vbo(void)
 {
     static const float bg[4][2] = {{-1, -1}, {1, -1}, {1, 1}, {-1, 1}};
-    vertex *vbo = linearAlloc(sizeof(vertex) * (BG_VERTS + (cube_mesh.quads + floor_mesh.quads) * 6));
+    vertex *vbo = linearAlloc(sizeof(vertex) * (BG_VERTS + (guy_mesh.tris + floor_mesh.tris) * 3));
     vertex *out = vbo;
     for (int i = 0; i < 6; i++)
         *out++ = (vertex){{bg[quad_tris[i]][0], bg[quad_tris[i]][1], -0.5f}, {0.1f, 0.1f, 0.15f}};
-    out = add_mesh(out, &cube_mesh);
+    out = add_mesh(out, &guy_mesh);
     add_mesh(out, &floor_mesh);
     return vbo;
 }
@@ -110,16 +111,15 @@ int main(void)
         w = world_update(w, read_input(hidKeysHeld()));
 
         /* view = translate(0, 0, -dist) rotX(pitch) rotY(-yaw) translate(-cam.x, 0, -cam.z) */
-        C3D_Mtx view, cube;
+        C3D_Mtx view, guy;
         Mtx_Identity(&view);
         Mtx_Translate(&view, 0.0f, 0.0f, -w.cam.dist / 100.0f, true);
         Mtx_RotateX(&view, C3D_AngleFromDegrees(w.cam.pitch / 10.0f), true);
         Mtx_RotateY(&view, C3D_AngleFromDegrees(-w.cam.yaw / 10.0f), true);
         Mtx_Translate(&view, -w.cam.x / 100.0f, 0.0f, -w.cam.z / 100.0f, true);
-        Mtx_Copy(&cube, &view);
-        Mtx_Translate(&cube, w.x / 100.0f, 0.0f, w.z / 100.0f, true);
-        Mtx_RotateX(&cube, C3D_AngleFromDegrees(w.spin), true);
-        Mtx_RotateY(&cube, C3D_AngleFromDegrees(w.spin), true);
+        Mtx_Copy(&guy, &view);
+        Mtx_Translate(&guy, w.x / 100.0f, (float)FLOOR_Y, w.z / 100.0f, true);
+        Mtx_RotateY(&guy, C3D_AngleFromDegrees(w.heading / 10.0f), true);
 
         C3D_FrameBegin(C3D_FRAME_SYNCDRAW);
         C3D_RenderTargetClear(top, C3D_CLEAR_ALL, 0x000000FF, 0);
@@ -134,10 +134,10 @@ int main(void)
 
         C3D_DepthTest(true, GPU_GREATER, GPU_WRITE_ALL);
         C3D_FVUnifMtx4x4(GPU_VERTEX_SHADER, u_proj, &proj);
-        C3D_FVUnifMtx4x4(GPU_VERTEX_SHADER, u_mv, &cube);
-        C3D_DrawArrays(GPU_TRIANGLES, BG_VERTS, cube_mesh.quads * 6);
+        C3D_FVUnifMtx4x4(GPU_VERTEX_SHADER, u_mv, &guy);
+        C3D_DrawArrays(GPU_TRIANGLES, BG_VERTS, guy_mesh.tris * 3);
         C3D_FVUnifMtx4x4(GPU_VERTEX_SHADER, u_mv, &view);
-        C3D_DrawArrays(GPU_TRIANGLES, BG_VERTS + cube_mesh.quads * 6, floor_mesh.quads * 6);
+        C3D_DrawArrays(GPU_TRIANGLES, BG_VERTS + guy_mesh.tris * 3, floor_mesh.tris * 3);
         C3D_FrameEnd(0);
     }
 

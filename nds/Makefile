@@ -4,7 +4,7 @@ endif
 
 # Read by ds_rules' %.nds rule; must be set before the include.
 GAME_TITLE     := hangout64
-GAME_SUBTITLE1 := Spinning cube
+GAME_SUBTITLE1 := 3D homebrew demo
 GAME_SUBTITLE2 := github.com/gavinhsmith/hangout64
 
 # Captured by ds_rules' %.elf rule at include time.
@@ -14,7 +14,7 @@ include $(DEVKITARM)/ds_rules
 
 TARGET  := hangout64
 BUILD   := build
-OBJS    := $(BUILD)/main.o $(BUILD)/cube.o
+OBJS    := $(BUILD)/main.o $(BUILD)/world.o $(BUILD)/guy_mesh.o
 ARCH    := -march=armv5te -mtune=arm946e-s
 CFLAGS  := -O2 -Wall $(ARCH) -DARM9 $(_EXTRADEFS) -I$(LIBNDS)/include -I../core
 # ds_rules' %.elf rule links these, adding calico's specs and runtime.

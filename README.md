@@ -1,7 +1,7 @@
 # hangout64
 Multi-platform demo for a simple 3D homebrew title for Nintendo 64 and beyond.
 
-Currently a spinning cube, rendered at 320x240 everywhere (DS: native 256x192) and scaled up.
+Currently a little guy walking around a checkered floor, rendered at 320x240 everywhere (DS: native 256x192) and scaled up.
 
 | Folder | Platform | Library | Output |
 |---|---|---|---|
@@ -14,8 +14,9 @@ Currently a spinning cube, rendered at 320x240 everywhere (DS: native 256x192) a
 
 ## Controls
 
-The cube spins and slides around a checkered floor; the camera eases after it. Movement
-is relative to the camera (forward = into the screen). Orbit and zoom ease too.
+The guy walks around a checkered floor and turns to face where he's going; the camera
+eases after him. Movement is relative to the camera (forward = into the screen). Orbit and
+zoom ease too.
 
 | Platform | Move | Orbit camera | Zoom in / out | Exit |
 |---|---|---|---|---|
@@ -47,6 +48,15 @@ make n64-reset  # drop the cached N64 toolchain + libdragon volume (e.g. after a
 - GameCube/Wii: Dolphin; on hardware via Swiss (GC) or the Homebrew Channel / `wiiload` (Wii)
 - DS: melonDS 1.0+, or a flashcart. DeSmuME 0.9.13 shows white screens for anything built with libnds 2 / calico.
 - 3DS: Azahar, or the Homebrew Launcher / `3dslink`
+
+## Models
+
+`assets/model/*.obj` are converted to C with `tools/obj2c.py` (Z-up, front facing -Y, as
+exported from OwlCAD). The output is committed, so builds don't need Python:
+
+```sh
+python3 tools/obj2c.py assets/model/guy.obj guy_mesh 160,235,245 > core/guy_mesh.c
+```
 
 ## CI
 

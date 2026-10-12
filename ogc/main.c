@@ -5,7 +5,7 @@
 #ifdef HW_RVL
 #include <wiiuse/wpad.h>
 #endif
-#include "cube.h"
+#include "world.h"
 
 #define FIFO_SIZE (256 * 1024)
 
@@ -60,7 +60,7 @@ static void video_init(void)
     GX_SetDispCopyGamma(GX_GM_1_0);
     GX_SetCullMode(GX_CULL_NONE);
 
-    GX_SetVtxAttrFmt(GX_VTXFMT0, GX_VA_POS, GX_POS_XYZ, GX_S8, 0);
+    GX_SetVtxAttrFmt(GX_VTXFMT0, GX_VA_POS, GX_POS_XYZ, GX_S16, 8); /* 8.8 = MESH_ONE */
     GX_SetVtxAttrFmt(GX_VTXFMT0, GX_VA_CLR0, GX_CLR_RGB, GX_RGB8, 0);
     GX_SetVtxAttrFmt(GX_VTXFMT1, GX_VA_POS, GX_POS_XYZ, GX_F32, 0);
     GX_SetVtxAttrFmt(GX_VTXFMT1, GX_VA_TEX0, GX_TEX_ST, GX_F32, 0);
@@ -84,12 +84,12 @@ static void video_init(void)
 static void draw_mesh(const mesh *m, Mtx mv)
 {
     GX_LoadPosMtxImm(mv, GX_PNMTX0);
-    GX_Begin(GX_QUADS, GX_VTXFMT0, m->quads * 4);
-    for (int q = 0; q < m->quads; q++) {
-        for (int c = 0; c < 4; c++) {
-            const int8_t *v = m->verts[q * 4 + c];
-            GX_Position3s8(v[0], v[1], v[2]);
-            GX_Color3u8(m->colors[q][0], m->colors[q][1], m->colors[q][2]);
+    GX_Begin(GX_TRIANGLES, GX_VTXFMT0, m->tris * 3);
+    for (int t = 0; t < m->tris; t++) {
+        for (int c = 0; c < 3; c++) {
+            const int16_t *v = m->verts[t * 3 + c];
+            GX_Position3s16(v[0], v[1], v[2]);
+            GX_Color3u8(m->colors[t][0], m->colors[t][1], m->colors[t][2]);
         }
     }
     GX_End();
@@ -123,13 +123,11 @@ static void draw_scene(const world *w)
     guMtxTransApply(view, view, 0.0f, 0.0f, -w->cam.dist / 100.0f);
     draw_mesh(&floor_mesh, view);
 
-    /* cube = translate(x, 0, z) rotX(spin) rotY(spin) */
-    guMtxRotDeg(rx, 'x', (f32)w->spin);
-    guMtxRotDeg(ry, 'y', (f32)w->spin);
-    guMtxConcat(rx, ry, rot);
-    guMtxTransApply(rot, model, w->x / 100.0f, 0.0f, w->z / 100.0f);
+    /* guy = translate(x, FLOOR_Y, z) rotY(heading) */
+    guMtxRotDeg(ry, 'y', w->heading / 10.0f);
+    guMtxTransApply(ry, model, w->x / 100.0f, (f32)FLOOR_Y, w->z / 100.0f);
     guMtxConcat(view, model, mv);
-    draw_mesh(&cube_mesh, mv);
+    draw_mesh(&guy_mesh, mv);
 }
 
 /* Pass 2: copy the 320x240 frame to a texture and draw it over the whole EFB with

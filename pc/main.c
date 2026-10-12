@@ -2,7 +2,7 @@
 #include <SDL3/SDL.h>
 #include <SDL3/SDL_main.h>
 #include <SDL3/SDL_opengl.h>
-#include "cube.h"
+#include "world.h"
 
 /* Power-of-two texture holding the 320x240 frame, so plain GL 1.1 works everywhere. */
 #define TEX_W 512
@@ -29,12 +29,13 @@ static unsigned read_input(void)
 
 static void draw_mesh(const mesh *m)
 {
-    glBegin(GL_QUADS);
-    for (int q = 0; q < m->quads; q++) {
-        glColor3ubv(m->colors[q]);
-        for (int c = 0; c < 4; c++) {
-            const int8_t *v = m->verts[q * 4 + c];
-            glVertex3f(v[0], v[1], v[2]);
+    const float k = 1.0f / MESH_ONE;
+    glBegin(GL_TRIANGLES);
+    for (int t = 0; t < m->tris; t++) {
+        glColor3ubv(m->colors[t]);
+        for (int c = 0; c < 3; c++) {
+            const int16_t *v = m->verts[t * 3 + c];
+            glVertex3f(v[0] * k, v[1] * k, v[2] * k);
         }
     }
     glEnd();
@@ -59,10 +60,9 @@ static void draw_scene(const world *w)
     glTranslatef(-w->cam.x / 100.0f, 0.0f, -w->cam.z / 100.0f);
     draw_mesh(&floor_mesh);
 
-    glTranslatef(w->x / 100.0f, 0.0f, w->z / 100.0f);
-    glRotatef((float)w->spin, 1.0f, 0.0f, 0.0f);
-    glRotatef((float)w->spin, 0.0f, 1.0f, 0.0f);
-    draw_mesh(&cube_mesh);
+    glTranslatef(w->x / 100.0f, (float)FLOOR_Y, w->z / 100.0f);
+    glRotatef(w->heading / 10.0f, 0.0f, 1.0f, 0.0f);
+    draw_mesh(&guy_mesh);
 }
 
 /* Grab the 320x240 frame and draw it integer-scaled, centred, black bars around. */

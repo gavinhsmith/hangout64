@@ -64,3 +64,6 @@ core/test_core
 *.smdh
 *.shbin
 *.lst
+
+# Model sources (*.obj above is for C object files)
+!assets/**/*.obj

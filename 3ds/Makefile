@@ -6,7 +6,7 @@ include $(DEVKITARM)/3ds_rules
 
 TARGET  := hangout64
 BUILD   := build
-OBJS    := $(BUILD)/vshader.shbin.o $(BUILD)/main.o $(BUILD)/cube.o
+OBJS    := $(BUILD)/vshader.shbin.o $(BUILD)/main.o $(BUILD)/world.o $(BUILD)/guy_mesh.o
 ARCH    := -march=armv6k -mtune=mpcore -mfloat-abi=hard -mtp=soft
 CFLAGS  := -O2 -Wall $(ARCH) -D__3DS__ -I$(CTRULIB)/include -I../core -I$(BUILD)
 LDFLAGS := -specs=3dsx.specs $(ARCH)

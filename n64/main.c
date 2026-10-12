@@ -40,6 +40,17 @@ static void draw_mesh(const mesh *m)
     glEnd();
 }
 
+/* Record a mesh once as a display list (an RSP command block) so drawing it each frame
+ * costs the CPU one call instead of a GL call per vertex. */
+static GLuint compile_mesh(const mesh *m)
+{
+    GLuint list = glGenLists(1);
+    glNewList(list, GL_COMPILE);
+    draw_mesh(m);
+    glEndList();
+    return list;
+}
+
 int main(void)
 {
     display_init(RESOLUTION_320x240, DEPTH_16_BPP, 3, GAMMA_NONE, FILTERS_RESAMPLE);
@@ -55,6 +66,7 @@ int main(void)
 
     world w = world_init(1);
     camera cam = camera_init();
+    GLuint level_list = compile_mesh(&level_mesh), guy_list = compile_mesh(&guy_mesh);
     for (;;) {
         rdpq_attach(display_get(), display_get_zbuf());
         gl_context_begin();
@@ -67,14 +79,14 @@ int main(void)
         glRotatef(v->pitch / 10.0f, 1.0f, 0.0f, 0.0f);
         glRotatef(-v->yaw / 10.0f, 0.0f, 1.0f, 0.0f);
         glTranslatef(-v->x / 1000.0f, -v->y / 1000.0f, -v->z / 1000.0f);
-        draw_mesh(&level_mesh);
+        glCallList(level_list);
 
         for (int i = 0; i < w.player_count; i++) {
             const player *p = &w.players[i];
             glPushMatrix();
             glTranslatef(p->x / 1000.0f, FLOOR_Y + p->y / 1000.0f, p->z / 1000.0f);
             glRotatef(p->heading / 10.0f, 0.0f, 1.0f, 0.0f);
-            draw_mesh(&guy_mesh);
+            glCallList(guy_list);
             glPopMatrix();
         }
 

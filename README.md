@@ -51,8 +51,8 @@ make n64-reset  # drop the cached N64 toolchain + libdragon volume (e.g. after a
 
 ## Places
 
-A place is the content of one game: parts (boxes, optionally drawn with a custom model) and
-the models they use. Places are data, loaded and validated at runtime by `core/place.c`,
+A place is the content of one game: parts (boxes, optionally drawn with a custom model), the
+models they use, and the models' textures. Places are data, loaded and validated at runtime by `core/place.c`,
 so they can be delivered over the network later. The built-in place is
 `assets/places/course.json`, packed into `core/default_place.c`:
 
@@ -61,8 +61,11 @@ python3 tools/placec.py assets/places/course.json core/default_place.c default_p
 python3 tools/placec.py assets/places/course.json course.place   # the same, as a binary file
 ```
 
-The format is described at the top of `tools/placec.py`. Budgets (parts, meshes, triangles)
-are in `core/world.h` and are sized for the weakest console.
+The format is described at the top of `tools/placec.py`. Budgets (parts, meshes, textures,
+triangles) are in `core/world.h` and are sized for the weakest console. Textures are PNGs with
+at most 16 colours, 8, 16 or 32 px per side (32x32 fits the N64's texture memory); they are
+drawn nearest-filtered and tinted by the model's colour. `placec.py` needs Pillow
+(`pip install pillow`).
 
 Engine assets (like the avatar) are compiled in instead, with `tools/obj2c.py`:
 

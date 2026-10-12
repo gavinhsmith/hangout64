@@ -10,6 +10,27 @@
 #define FIFO_SIZE (256 * 1024)
 
 static place pl; /* the loaded place; mesh parts are drawn from it */
+static GXTexObj place_textures[PLACE_MAX_TEXTURES];
+
+/* Expand each 16-colour place texture to RGB565 in GX's tiled layout (4x4-pixel tiles,
+ * 32 bytes each, row-major) and set it up nearest-filtered. */
+static void upload_textures(void)
+{
+    for (int i = 0; i < pl.texture_count; i++) {
+        const texture *t = &pl.textures[i];
+        uint16_t *buf = memalign(32, t->w * t->h * 2);
+        for (int y = 0; y < t->h; y++) {
+            for (int x = 0; x < t->w; x++) {
+                const uint8_t *c = t->palette[texel(t, x, y)];
+                int tile = (y / 4) * (t->w / 4) + x / 4;
+                buf[tile * 16 + (y % 4) * 4 + x % 4] = (c[0] >> 3) << 11 | (c[1] >> 2) << 5 | c[2] >> 3;
+            }
+        }
+        DCFlushRange(buf, t->w * t->h * 2);
+        GX_InitTexObj(&place_textures[i], buf, t->w, t->h, GX_TF_RGB565, GX_REPEAT, GX_REPEAT, GX_FALSE);
+        GX_InitTexObjLOD(&place_textures[i], GX_NEAR, GX_NEAR, 0.0f, 0.0f, 0.0f, GX_FALSE, GX_FALSE, GX_ANISO_1);
+    }
+}
 
 static GXRModeObj mode;
 static void *xfb[2];
@@ -66,6 +87,9 @@ static void video_init(void)
     GX_SetVtxAttrFmt(GX_VTXFMT0, GX_VA_CLR0, GX_CLR_RGB, GX_RGB8, 0);
     GX_SetVtxAttrFmt(GX_VTXFMT1, GX_VA_POS, GX_POS_XYZ, GX_F32, 0);
     GX_SetVtxAttrFmt(GX_VTXFMT1, GX_VA_TEX0, GX_TEX_ST, GX_F32, 0);
+    GX_SetVtxAttrFmt(GX_VTXFMT2, GX_VA_POS, GX_POS_XYZ, GX_S16, 8);
+    GX_SetVtxAttrFmt(GX_VTXFMT2, GX_VA_CLR0, GX_CLR_RGB, GX_RGB8, 0);
+    GX_SetVtxAttrFmt(GX_VTXFMT2, GX_VA_TEX0, GX_TEX_ST, GX_S16, 8); /* 8.8, like MESH_ONE */
     GX_SetChanCtrl(GX_COLOR0A0, GX_DISABLE, GX_SRC_REG, GX_SRC_VTX, GX_LIGHTNULL, GX_DF_NONE, GX_AF_NONE);
     GX_SetTexCoordGen(GX_TEXCOORD0, GX_TG_MTX2x4, GX_TG_TEX0, GX_IDENTITY);
     GX_SetNumTevStages(1);
@@ -83,18 +107,36 @@ static void video_init(void)
     clear_scene_area();
 }
 
+/* Textured meshes use VTXFMT2 (with texture coordinates) and a TEV stage that multiplies
+ * the texture by the triangle colour; untextured ones pass the colour straight through. */
 static void draw_mesh(const mesh *m, Mtx mv)
 {
+    int textured = m->texture >= 0;
     GX_LoadPosMtxImm(mv, GX_PNMTX0);
-    GX_Begin(GX_TRIANGLES, GX_VTXFMT0, m->tris * 3);
+    if (textured) {
+        GX_LoadTexObj(&place_textures[m->texture], GX_TEXMAP0);
+        GX_SetVtxDesc(GX_VA_TEX0, GX_DIRECT);
+        GX_SetNumTexGens(1);
+        GX_SetTevOrder(GX_TEVSTAGE0, GX_TEXCOORD0, GX_TEXMAP0, GX_COLOR0A0);
+        GX_SetTevOp(GX_TEVSTAGE0, GX_MODULATE);
+    }
+    GX_Begin(GX_TRIANGLES, textured ? GX_VTXFMT2 : GX_VTXFMT0, m->tris * 3);
     for (int t = 0; t < m->tris; t++) {
         for (int c = 0; c < 3; c++) {
             const int16_t *v = m->verts[t * 3 + c];
             GX_Position3s16(v[0], v[1], v[2]);
             GX_Color3u8(m->colors[t][0], m->colors[t][1], m->colors[t][2]);
+            if (textured)
+                GX_TexCoord2s16(m->uvs[t * 3 + c][0], m->uvs[t * 3 + c][1]);
         }
     }
     GX_End();
+    if (textured) {
+        GX_SetVtxDesc(GX_VA_TEX0, GX_NONE);
+        GX_SetNumTexGens(0);
+        GX_SetTevOrder(GX_TEVSTAGE0, GX_TEXCOORDNULL, GX_TEXMAP_NULL, GX_COLOR0A0);
+        GX_SetTevOp(GX_TEVSTAGE0, GX_PASSCLR);
+    }
 }
 
 /* Pass 1: the 3D scene into the top-left 320x240 of the EFB. */
@@ -248,6 +290,7 @@ int main(void)
     if (place_load(&pl, default_place, default_place_size) != PLACE_OK)
         exit(1);
     world w = world_init(&pl, 1);
+    upload_textures();
     camera cam = camera_init();
     while (!quit) {
         draw_scene(&w, &cam.now);

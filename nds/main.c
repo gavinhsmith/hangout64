@@ -3,6 +3,28 @@
 #include "world.h"
 
 static place pl; /* the loaded place; mesh parts are drawn from it */
+static int place_textures[PLACE_MAX_TEXTURES];
+
+/* The DS's 16-colour texture format matches the place format (4 bits, low nibble = left
+ * pixel), so pixels go up as they are; only the palette is converted to RGB15. */
+static void upload_textures(void)
+{
+    vramSetBankA(VRAM_A_TEXTURE);
+    vramSetBankE(VRAM_E_TEX_PALETTE);
+    glGenTextures(pl.texture_count, place_textures);
+    for (int i = 0; i < pl.texture_count; i++) {
+        const texture *t = &pl.textures[i];
+        u16 palette[16];
+        for (int c = 0; c < 16; c++)
+            palette[c] = RGB15(t->palette[c][0] >> 3, t->palette[c][1] >> 3, t->palette[c][2] >> 3);
+        glBindTexture(0, place_textures[i]);
+        /* Sizes are TEXTURE_SIZE_8/16/32 = log2(pixels) - 3. */
+        glTexImage2D(0, 0, GL_RGB16, __builtin_ctz(t->w) - 3, __builtin_ctz(t->h) - 3, 0,
+                     TEXGEN_TEXCOORD | GL_TEXTURE_WRAP_S | GL_TEXTURE_WRAP_T, t->pixels);
+        glColorTableEXT(0, 0, 16, 0, 0, palette);
+    }
+    glBindTexture(0, 0);
+}
 
 /* D-pad moves, A jumps, R + D-pad orbits, X/Y zoom in/out. */
 static unsigned read_input(u32 keys)
@@ -37,15 +59,22 @@ static void draw_mesh(const mesh *m)
 {
     glPushMatrix();
     glScalef32(inttof32(2), inttof32(2), inttof32(2));
+    /* Textured: the triangle colour tints the texture (the default modulate mode).
+     * Texture coordinates are 12.4 texels: 8.8 fractions of the texture * size / 16. */
+    const texture *tex = m->texture >= 0 ? &pl.textures[m->texture] : NULL;
+    glBindTexture(0, tex ? place_textures[m->texture] : 0);
     glBegin(GL_TRIANGLES);
     for (int t = 0; t < m->tris; t++) {
         glColor3b(m->colors[t][0], m->colors[t][1], m->colors[t][2]);
         for (int c = 0; c < 3; c++) {
             const int16_t *v = m->verts[t * 3 + c];
+            if (tex)
+                glTexCoord2t16(m->uvs[t * 3 + c][0] * tex->w / 16, m->uvs[t * 3 + c][1] * tex->h / 16);
             glVertex3v16(v[0] * 8, v[1] * 8, v[2] * 8);
         }
     }
     glEnd();
+    glBindTexture(0, 0);
     glPopMatrix(1);
 }
 
@@ -71,6 +100,8 @@ int main(void)
         return 1;
     }
     world w = world_init(&pl, 1);
+    glEnable(GL_TEXTURE_2D);
+    upload_textures();
     camera cam = camera_init();
     for (;;) {
         scanKeys();

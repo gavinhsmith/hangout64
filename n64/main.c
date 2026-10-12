@@ -6,6 +6,41 @@
 #define STICK_DEADZONE 32
 
 static place pl; /* the loaded place; mesh parts are drawn from it */
+static GLuint place_textures[PLACE_MAX_TEXTURES];
+
+/* Expand each 16-colour place texture to RGBA16 (32x32 = 2 KB, fits TMEM) and upload it,
+ * nearest-filtered. */
+static void upload_textures(void)
+{
+    glGenTextures(pl.texture_count, place_textures);
+    for (int i = 0; i < pl.texture_count; i++) {
+        const texture *t = &pl.textures[i];
+        surface_t *s = malloc(sizeof *s);
+        *s = surface_alloc(FMT_RGBA16, t->w, t->h); /* uncached, so the RDP sees our writes */
+        uint16_t *px = s->buffer;
+        for (int y = 0; y < t->h; y++) {
+            for (int x = 0; x < t->w; x++) {
+                const uint8_t *c = t->palette[texel(t, x, y)];
+                px[y * (s->stride / 2) + x] = (c[0] >> 3) << 11 | (c[1] >> 3) << 6 | (c[2] >> 3) << 1 | 1;
+            }
+        }
+        glBindTexture(GL_TEXTURE_2D, place_textures[i]);
+        glSurfaceTexImageN64(GL_TEXTURE_2D, 0, s, NULL);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+    }
+}
+
+/* Textured meshes: the triangle colour tints the texture (GL_MODULATE, the default). */
+static void bind_texture(const mesh *m)
+{
+    if (m->texture >= 0) {
+        glEnable(GL_TEXTURE_2D);
+        glBindTexture(GL_TEXTURE_2D, place_textures[m->texture]);
+    } else {
+        glDisable(GL_TEXTURE_2D);
+    }
+}
 
 /* Stick moves, A jumps, D-pad orbits, C-up/C-down zoom in/out. */
 static unsigned read_input(void)
@@ -36,6 +71,8 @@ static void draw_mesh(const mesh *m)
         glColor3ub(m->colors[t][0], m->colors[t][1], m->colors[t][2]);
         for (int c = 0; c < 3; c++) {
             const int16_t *v = m->verts[t * 3 + c];
+            if (m->uvs)
+                glTexCoord2f(m->uvs[t * 3 + c][0] * k, m->uvs[t * 3 + c][1] * k);
             glVertex3f(v[0] * k, v[1] * k, v[2] * k);
         }
     }
@@ -46,10 +83,12 @@ static void draw_mesh(const mesh *m)
  * costs the CPU one call instead of a GL call per vertex. */
 static GLuint compile_mesh(const mesh *m)
 {
+    bind_texture(m); /* before recording, so the texture coordinates are recorded too */
     GLuint list = glGenLists(1);
     glNewList(list, GL_COMPILE);
     draw_mesh(m);
     glEndList();
+    glDisable(GL_TEXTURE_2D);
     return list;
 }
 
@@ -68,6 +107,7 @@ int main(void)
 
     assertf(place_load(&pl, default_place, default_place_size) == PLACE_OK, "built-in place failed to load");
     world w = world_init(&pl, 1);
+    upload_textures();
     camera cam = camera_init();
     GLuint level_list = compile_mesh(&level_mesh), guy_list = compile_mesh(&guy_mesh);
     GLuint mesh_lists[PLACE_MAX_MESHES];
@@ -94,7 +134,9 @@ int main(void)
                 continue;
             glPushMatrix();
             glTranslatef(q->x / 1000.0f, FLOOR_Y + (q->y - q->sy / 2) / 1000.0f, q->z / 1000.0f);
+            bind_texture(&pl.meshes[q->mesh]);
             glCallList(mesh_lists[q->mesh]);
+            glDisable(GL_TEXTURE_2D);
             glPopMatrix();
         }
 

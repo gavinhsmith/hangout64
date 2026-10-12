@@ -8,13 +8,34 @@
 #define SCREEN_W 320
 #define SCREEN_H 240
 
-/* Triangles with one colour each. Coordinates are 8.8 fixed point: MESH_ONE = 1 unit. */
+/* Triangles with one colour each, optionally textured (the colour then tints the texture).
+ * Coordinates are 8.8 fixed point: MESH_ONE = 1 unit, or the whole texture for uvs. */
 #define MESH_ONE 256
 typedef struct {
     const int16_t (*verts)[3];  /* tris * 3 corners */
     const uint8_t (*colors)[3]; /* one per triangle */
     int tris;
+    const int16_t (*uvs)[2];    /* tris * 3 corners, or NULL when untextured */
+    int texture;                /* index into the place's textures, or -1 */
 } mesh;
+
+/* 16 colours, 4 bits per pixel, rows top to bottom, low nibble = left pixel.
+ * TEXTURE_MIN..TEXTURE_MAX pixels per side, powers of two: 32x32 at 16 bits is 2 KB, which
+ * fits the N64's 4 KB of texture memory without palette support. */
+#define TEXTURE_MIN 8
+#define TEXTURE_MAX 32
+typedef struct {
+    int w, h;
+    uint8_t palette[16][3];
+    const uint8_t *pixels; /* w * h / 2 bytes */
+} texture;
+
+/* Palette index of pixel (x, y). */
+static inline int texel(const texture *t, int x, int y)
+{
+    uint8_t b = t->pixels[(y * t->w + x) / 2];
+    return x & 1 ? b >> 4 : b & 15;
+}
 
 #define FLOOR_TILES 10 /* per side, 2 units each, centred on the origin */
 #define FLOOR_Y -1     /* where the floor is drawn; game heights are measured from it */
@@ -42,15 +63,18 @@ typedef struct {
     int part_count;
     mesh *meshes;
     int mesh_count;
+    texture *textures;
+    int texture_count;
 } place;
 
 enum {
     PLACE_OK, PLACE_BAD_MAGIC, PLACE_BAD_VERSION, PLACE_TRUNCATED, PLACE_BAD_CHUNK,
     PLACE_BAD_INDEX, PLACE_BAD_VALUE, PLACE_OVER_BUDGET, PLACE_NO_MEMORY,
 };
-#define PLACE_VERSION 1
+#define PLACE_VERSION 2
 #define PLACE_MAX_PARTS 256
 #define PLACE_MAX_MESHES 32
+#define PLACE_MAX_TEXTURES 16
 #define PLACE_MAX_TRIS 1400 /* floor + parts; leaves the DS's 2048 room for 4 avatars */
 #define PLACE_MAX_COORD 50000 /* positions and sizes; keeps 8.8 mesh coords in range */
 

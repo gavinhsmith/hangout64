@@ -287,4 +287,4 @@ static const uint8_t colors[140][3] = {
     {120, 177, 184},
 };
 
-const mesh guy_mesh = {verts, colors, 140};
+const mesh guy_mesh = {.verts = verts, .colors = colors, .tris = 140, .texture = -1};

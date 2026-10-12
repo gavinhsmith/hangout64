@@ -2,6 +2,7 @@
 #include <SDL3/SDL.h>
 #include <SDL3/SDL_main.h>
 #include <SDL3/SDL_opengl.h>
+#include <string.h>
 #include "world.h"
 
 /* Power-of-two texture holding the 320x240 frame, so plain GL 1.1 works everywhere. */
@@ -10,6 +11,25 @@
 #define TICK_MS (1000.0 / 60.0)
 
 static place pl; /* the loaded place; mesh parts are drawn from it */
+static GLuint place_textures[PLACE_MAX_TEXTURES];
+
+/* Expand each 16-colour place texture to RGB and upload it, nearest-filtered. */
+static void upload_textures(void)
+{
+    static uint8_t rgb[TEXTURE_MAX * TEXTURE_MAX][3];
+    glGenTextures(pl.texture_count, place_textures);
+    for (int i = 0; i < pl.texture_count; i++) {
+        const texture *t = &pl.textures[i];
+        for (int y = 0; y < t->h; y++)
+            for (int x = 0; x < t->w; x++)
+                memcpy(rgb[y * t->w + x], t->palette[texel(t, x, y)], 3);
+        glBindTexture(GL_TEXTURE_2D, place_textures[i]);
+        glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, t->w, t->h, 0, GL_RGB, GL_UNSIGNED_BYTE, rgb);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+    }
+}
 
 /* WASD moves, Space jumps, arrows orbit, Q/E zoom in/out. */
 static unsigned read_input(void)
@@ -30,18 +50,26 @@ static unsigned read_input(void)
     return in;
 }
 
+/* Textured meshes: the triangle colour tints the texture (GL_MODULATE, the default). */
 static void draw_mesh(const mesh *m)
 {
     const float k = 1.0f / MESH_ONE;
+    if (m->texture >= 0) {
+        glEnable(GL_TEXTURE_2D);
+        glBindTexture(GL_TEXTURE_2D, place_textures[m->texture]);
+    }
     glBegin(GL_TRIANGLES);
     for (int t = 0; t < m->tris; t++) {
         glColor3ubv(m->colors[t]);
         for (int c = 0; c < 3; c++) {
             const int16_t *v = m->verts[t * 3 + c];
+            if (m->uvs)
+                glTexCoord2f(m->uvs[t * 3 + c][0] * k, m->uvs[t * 3 + c][1] * k);
             glVertex3f(v[0] * k, v[1] * k, v[2] * k);
         }
     }
     glEnd();
+    glDisable(GL_TEXTURE_2D);
 }
 
 static void draw_scene(const world *w, const view *v)
@@ -152,6 +180,7 @@ int main(int argc, char **argv)
         return 1;
     }
     world w = world_init(&pl, 1);
+    upload_textures();
     camera cam = camera_init();
     double next = (double)SDL_GetTicks();
     for (;;) {

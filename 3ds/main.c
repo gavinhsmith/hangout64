@@ -18,7 +18,56 @@ static int mesh_first[PLACE_MAX_MESHES]; /* where each place mesh starts in the 
 typedef struct {
     float pos[3];
     float clr[3];
+    float tc[2];
 } vertex;
+
+static C3D_Tex place_textures[PLACE_MAX_TEXTURES];
+
+/* Bit-interleave x and y (0..7) into a position in an 8x8 tile (Morton / Z order). */
+static u32 morton8(u32 x, u32 y)
+{
+    u32 m = 0;
+    for (int i = 0; i < 3; i++)
+        m |= ((x >> i) & 1) << (2 * i) | ((y >> i) & 1) << (2 * i + 1);
+    return m;
+}
+
+/* Expand each 16-colour place texture to RGB565 in the PICA's tiled layout (8x8 tiles in
+ * Morton order, rows stored bottom-up) and upload it, nearest-filtered. */
+static void upload_textures(void)
+{
+    static u16 data[TEXTURE_MAX * TEXTURE_MAX];
+    for (int i = 0; i < pl.texture_count; i++) {
+        const texture *t = &pl.textures[i];
+        for (int y = 0; y < t->h; y++) {
+            for (int x = 0; x < t->w; x++) {
+                const uint8_t *c = t->palette[texel(t, x, y)];
+                int fy = t->h - 1 - y;
+                u32 tile = (fy / 8) * (t->w / 8) + x / 8;
+                data[tile * 64 + morton8(x % 8, fy % 8)] = (c[0] >> 3) << 11 | (c[1] >> 2) << 5 | c[2] >> 3;
+            }
+        }
+        C3D_TexInit(&place_textures[i], t->w, t->h, GPU_RGB565);
+        C3D_TexUpload(&place_textures[i], data);
+        C3D_TexSetFilter(&place_textures[i], GPU_NEAREST, GPU_NEAREST);
+        C3D_TexSetWrap(&place_textures[i], GPU_REPEAT, GPU_REPEAT);
+    }
+}
+
+/* Textured: texture * triangle colour. Untextured: the colour as is. */
+static void set_texture(int index)
+{
+    C3D_TexEnv *env = C3D_GetTexEnv(0);
+    C3D_TexEnvInit(env);
+    if (index >= 0) {
+        C3D_TexBind(0, &place_textures[index]);
+        C3D_TexEnvSrc(env, C3D_Both, GPU_TEXTURE0, GPU_PRIMARY_COLOR, 0);
+        C3D_TexEnvFunc(env, C3D_Both, GPU_MODULATE);
+    } else {
+        C3D_TexEnvSrc(env, C3D_Both, GPU_PRIMARY_COLOR, 0, 0);
+        C3D_TexEnvFunc(env, C3D_Both, GPU_REPLACE);
+    }
+}
 
 static const int quad_tris[6] = {0, 1, 2, 0, 2, 3};
 
@@ -28,9 +77,11 @@ static vertex *add_mesh(vertex *out, const mesh *m)
     for (int t = 0; t < m->tris; t++) {
         for (int c = 0; c < 3; c++) {
             const int16_t *v = m->verts[t * 3 + c];
+            const int16_t *uv = m->uvs ? m->uvs[t * 3 + c] : (const int16_t[2]){0, 0};
             *out++ = (vertex){{v[0] * k, v[1] * k, v[2] * k},
                               {m->colors[t][0] / 255.0f, m->colors[t][1] / 255.0f,
-                               m->colors[t][2] / 255.0f}};
+                               m->colors[t][2] / 255.0f},
+                              {uv[0] * k, uv[1] * k}};
         }
     }
     return out;
@@ -48,7 +99,7 @@ static vertex *build_vbo(void)
     vertex *vbo = linearAlloc(sizeof(vertex) * (BG_VERTS + tris * 3));
     vertex *out = vbo;
     for (int i = 0; i < 6; i++)
-        *out++ = (vertex){{bg[quad_tris[i]][0], bg[quad_tris[i]][1], -0.5f}, {0.1f, 0.1f, 0.15f}};
+        *out++ = (vertex){{bg[quad_tris[i]][0], bg[quad_tris[i]][1], -0.5f}, {0.1f, 0.1f, 0.15f}, {0, 0}};
     out = add_mesh(out, &guy_mesh);
     out = add_mesh(out, &level_mesh);
     for (int i = 0; i < pl.mesh_count; i++) {
@@ -99,6 +150,7 @@ int main(void)
     AttrInfo_Init(attr);
     AttrInfo_AddLoader(attr, 0, GPU_FLOAT, 3);
     AttrInfo_AddLoader(attr, 1, GPU_FLOAT, 3);
+    AttrInfo_AddLoader(attr, 2, GPU_FLOAT, 2);
 
     if (place_load(&pl, default_place, default_place_size) != PLACE_OK) {
         printf("built-in place failed to load\n");
@@ -109,12 +161,9 @@ int main(void)
     vertex *vbo = build_vbo();
     C3D_BufInfo *buf = C3D_GetBufInfo();
     BufInfo_Init(buf);
-    BufInfo_Add(buf, vbo, sizeof(vertex), 2, 0x10);
+    BufInfo_Add(buf, vbo, sizeof(vertex), 3, 0x210);
 
-    C3D_TexEnv *env = C3D_GetTexEnv(0);
-    C3D_TexEnvInit(env);
-    C3D_TexEnvSrc(env, C3D_Both, GPU_PRIMARY_COLOR, 0, 0);
-    C3D_TexEnvFunc(env, C3D_Both, GPU_REPLACE);
+    upload_textures();
     C3D_CullFace(GPU_CULL_NONE);
 
     C3D_Mtx proj, identity;
@@ -148,6 +197,7 @@ int main(void)
         C3D_DepthTest(false, GPU_ALWAYS, GPU_WRITE_COLOR);
         C3D_FVUnifMtx4x4(GPU_VERTEX_SHADER, u_proj, &identity);
         C3D_FVUnifMtx4x4(GPU_VERTEX_SHADER, u_mv, &identity);
+        set_texture(-1);
         C3D_DrawArrays(GPU_TRIANGLES, 0, BG_VERTS);
 
         C3D_DepthTest(true, GPU_GREATER, GPU_WRITE_ALL);
@@ -173,7 +223,9 @@ int main(void)
             Mtx_Copy(&m, &view);
             Mtx_Translate(&m, q->x / 1000.0f, FLOOR_Y + (q->y - q->sy / 2) / 1000.0f, q->z / 1000.0f, true);
             C3D_FVUnifMtx4x4(GPU_VERTEX_SHADER, u_mv, &m);
+            set_texture(pl.meshes[q->mesh].texture);
             C3D_DrawArrays(GPU_TRIANGLES, mesh_first[q->mesh], pl.meshes[q->mesh].tris * 3);
+            set_texture(-1);
         }
         C3D_FrameEnd(0);
     }

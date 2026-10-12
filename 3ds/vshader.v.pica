@@ -1,13 +1,15 @@
-; Transform position by modelView then projection; pass colour through.
+; Transform position by modelView then projection; pass colour and texcoord through.
 .fvec projection[4], modelView[4]
 
 .constf ones(1.0, 1.0, 1.0, 1.0)
 
 .out outpos position
 .out outclr color
+.out outtc0 texcoord0
 
 .alias inpos v0
 .alias inclr v1
+.alias intc v2
 
 .proc main
 	mov r0.xyz, inpos
@@ -24,5 +26,6 @@
 	dp4 outpos.w, projection[3], r1
 
 	mov outclr, inclr
+	mov outtc0, intc
 	end
 .end

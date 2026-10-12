@@ -57,11 +57,23 @@ static int load(const uint8_t *d, size_t size)
 
 static void test_place_loader(void)
 {
-    /* The default place: 8 parts, the last drawn with the one mesh (the statue). */
+    /* The default place: 11 parts; the statue (mesh 0, untextured) and three crates
+     * (mesh 1, textured with texture 0, a 32x32 crate). */
     assert(place_load(&pl, default_place, default_place_size) == PLACE_OK);
-    assert(pl.part_count == 8 && pl.mesh_count == 1 && pl.meshes[0].tris == guy_mesh.tris);
+    assert(pl.part_count == 11 && pl.mesh_count == 2 && pl.texture_count == 1);
     assert(pl.parts[1].y == 300 && pl.parts[1].sy == 600 && pl.parts[1].mesh == -1);
-    assert(pl.parts[7].mesh == 0 && pl.parts[7].color[0] == 230);
+    assert(pl.parts[7].mesh == 0 && pl.parts[7].color[0] == 230 && pl.parts[8].mesh == 1);
+    const mesh *statue = &pl.meshes[0], *crate = &pl.meshes[1];
+    assert(statue->tris == guy_mesh.tris && statue->texture == -1 && statue->uvs == NULL);
+    assert(crate->tris == 12 && crate->texture == 0 && crate->uvs != NULL);
+    for (int i = 0; i < crate->tris * 3; i++) /* each face maps the whole texture */
+        for (int a = 0; a < 2; a++)
+            assert(crate->uvs[i][a] == 0 || crate->uvs[i][a] == MESH_ONE);
+    const texture *tex = &pl.textures[0];
+    assert(tex->w == 32 && tex->h == 32);
+    const uint8_t *corner = tex->palette[texel(tex, 0, 0)], *nail = tex->palette[texel(tex, 2, 2)];
+    assert(corner[0] == 70 && corner[1] == 42 && corner[2] == 20);  /* dark outer edge */
+    assert(nail[0] == 210 && nail[1] == 200 && nail[2] == 180);     /* a nail */
 
     /* Every truncation is rejected cleanly. */
     for (size_t n = 0; n < default_place_size; n++)
@@ -91,11 +103,17 @@ static void test_place_loader(void)
     b = copy_default(0);
     size_t m = find_chunk(b, default_place_size, "MESH");
     unsigned nv = b[m] | b[m + 1] << 8;
-    wr16(b + m + 4 + nv * 6, nv); /* first triangle's first corner */
+    wr16(b + m + 8 + nv * 10, nv); /* first triangle's first corner */
     assert(load(b, default_place_size) == PLACE_BAD_INDEX);
     memcpy(b, default_place, default_place_size);
+    wr16(b + m + 4, 1); /* statue mesh -> texture 1, which doesn't exist */
+    assert(load(b, default_place_size) == PLACE_BAD_INDEX);
+    memcpy(b, default_place, default_place_size);
+    b[find_chunk(b, default_place_size, "TEXR")] = 6; /* 64 px wide: over TEXTURE_MAX */
+    assert(load(b, default_place_size) == PLACE_BAD_VALUE);
+    memcpy(b, default_place, default_place_size);
     size_t p = find_chunk(b, default_place_size, "PART");
-    wr16(b + p + 2 + 7 * 30 + 28, 1); /* statue -> mesh 1, which doesn't exist */
+    wr16(b + p + 2 + 7 * 30 + 28, 2); /* statue -> mesh 2, which doesn't exist */
     assert(load(b, default_place_size) == PLACE_BAD_INDEX);
     memcpy(b, default_place, default_place_size);
     wr32(b + p + 2 + 12, 0); /* part 0 with zero width */
@@ -233,9 +251,9 @@ int main(void)
     assert(lo == 0 && abs(hi - 24 * MESH_ONE / 10) <= 1);
 
     /* Level mesh: checkered floor at FLOOR_Y, then 10 triangles per box part (not the
-     * mesh part), its top face first, drawn at the part's top. */
+     * 4 mesh parts), its top face first, drawn at the part's top. */
     int floor_tris = FLOOR_TILES * FLOOR_TILES * 2;
-    assert(level_mesh.tris == floor_tris + 10 * (pl.part_count - 1));
+    assert(level_mesh.tris == floor_tris + 10 * (pl.part_count - 4));
     for (int i = 0; i < floor_tris * 3; i++)
         assert(level_mesh.verts[i][1] == FLOOR_Y * MESH_ONE);
     assert(level_mesh.colors[0][0] != level_mesh.colors[2][0]);

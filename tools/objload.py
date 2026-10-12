@@ -1,33 +1,58 @@
 """Load an OBJ (triangles or polygons, Z-up, front facing -Y) as an indexed mesh.
 
 The model is turned Y-up with its front facing -Z, centred on X/Z, feet at y = 0 and
-scaled to `height` units. Positions are 8.8 fixed point (256 = 1 unit). Each triangle
-gets `rgb` shaded by how much it faces a fixed light, so the shape reads without
-runtime lighting.
+scaled to `height` units. Positions and texture coordinates are 8.8 fixed point (256 = 1
+unit, or the full texture). Each triangle gets `rgb` shaded by how much it faces a fixed
+light, so the shape reads without runtime lighting.
 """
 
 LIGHT = (0.4, 0.8, 0.45)  # roughly from above, front-right
 
 
 def load_obj(path, height, rgb):
-    """Returns (verts, tris, colors): fixed-point (x, y, z), (a, b, c) indices, (r, g, b)."""
-    verts, tris = [], []
+    """Returns (verts, uvs, tris, colors): fixed-point (x, y, z), fixed-point (u, v) per
+    vertex or None if the model has no texture coordinates, (a, b, c) indices, (r, g, b)."""
+    positions, texcoords, faces = [], [], []
     for line in open(path, encoding='utf-8'):
         parts = line.split()
         if parts and parts[0] == 'v':
             x, y, z = map(float, parts[1:4])
-            verts.append((-x, z, y))  # Z-up, front -Y  ->  Y-up, front -Z (a proper rotation)
+            positions.append((-x, z, y))  # Z-up, front -Y  ->  Y-up, front -Z (a proper rotation)
+        elif parts and parts[0] == 'vt':
+            u, v = map(float, parts[1:3])
+            texcoords.append((u, 1 - v))  # OBJ's v runs up; texture rows run down
         elif parts and parts[0] == 'f':
-            idx = [int(p.split('/')[0]) - 1 for p in parts[1:]]
-            tris += [(idx[0], idx[i], idx[i + 1]) for i in range(1, len(idx) - 1)]
+            corners = []
+            for p in parts[1:]:
+                refs = p.split('/')
+                vt = int(refs[1]) - 1 if len(refs) > 1 and refs[1] and texcoords else None
+                corners.append((int(refs[0]) - 1, vt))
+            faces += [(corners[0], corners[i], corners[i + 1]) for i in range(1, len(corners) - 1)]
+
+    # A vertex is a (position, texcoord) pair; without texcoords keep the file's numbering.
+    if texcoords:
+        index, verts, uvs, tris = {}, [], [], []
+        for face in faces:
+            tri = []
+            for key in face:
+                if key not in index:
+                    index[key] = len(verts)
+                    verts.append(positions[key[0]])
+                    uvs.append(texcoords[key[1]] if key[1] is not None else (0, 0))
+                tri.append(index[key])
+            tris.append(tuple(tri))
+    else:
+        verts, uvs = positions, None
+        tris = [tuple(c[0] for c in face) for face in faces]
 
     lo = [min(v[i] for v in verts) for i in range(3)]
     hi = [max(v[i] for v in verts) for i in range(3)]
     scale = height / (hi[1] - lo[1])
     centre = ((lo[0] + hi[0]) / 2, lo[1], (lo[2] + hi[2]) / 2)
     fixed = [tuple(round((v[i] - centre[i]) * scale * 256) for i in range(3)) for v in verts]
+    fixed_uvs = [(round(u * 256), round(v * 256)) for u, v in uvs] if uvs else None
     colors = [tuple(min(255, round(c * _shade(verts, t))) for c in rgb) for t in tris]
-    return fixed, tris, colors
+    return fixed, fixed_uvs, tris, colors
 
 
 def _shade(verts, t):

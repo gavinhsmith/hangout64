@@ -1,26 +1,36 @@
-"""Pack a place (JSON + OBJ models) into the binary place format core/place.c loads.
+"""Pack a place (JSON + OBJ models + PNG textures) into the binary place format core/place.c
+loads. Needs Pillow (pip install pillow) for reading PNGs.
 
     python3 tools/placec.py assets/places/course.json course.place       # binary
     python3 tools/placec.py assets/places/course.json core/default_place.c default_place
 
 Format (all little-endian; see core/world.h):
-    "HG64"  u16 version
+    "HG64"  u16 version (2)
     then chunks:  tag[4]  u32 length  data[length]      (unknown tags are skipped)
-    "MESH"  u16 verts  u16 tris  verts * (s16 x, y, z)  tris * (u16 a, b, c, u8 r, g, b)
+    "TEXR"  u8 log2 width, log2 height (3..5: 8..32 px)  u8 pad[2]
+            palette 16 * (u8 r, g, b)  pixels w*h/2 bytes (4-bit indices, rows top to bottom,
+            low nibble = left pixel)
+    "MESH"  u16 verts  u16 tris  s16 texture (-1 none)  u16 pad
+            verts * (s16 x, y, z, u, v)  tris * (u16 a, b, c, u8 r, g, b)
     "PART"  u16 count  count * (s32 x, y, z, sx, sy, sz  u8 r, g, b, pad  s16 mesh)
+
+Positions and texture coordinates are 8.8 fixed point (256 = 1 unit / the whole texture).
+Triangle colours tint the texture. Textures and meshes are numbered in file order.
 
 JSON: lengths in units (floats); colours 0-255. "y" is the part's centre height above
 the floor. A part with "mesh" is drawn with that model (its origin at the part's bottom
-centre) and collides as its box.
+centre) and collides as its box. Textures must be 8, 16 or 32 px per side, <= 16 colours.
 """
 import json
 import os
 import struct
 import sys
 
+from PIL import Image
+
 from objload import load_obj
 
-VERSION = 1
+VERSION = 2
 
 
 def chunk(tag, data):
@@ -31,13 +41,39 @@ def milli(v):
     return round(v * 1000)
 
 
+def pack_texture(path):
+    img = Image.open(path).convert('RGB')
+    w, h = img.size
+    if w not in (8, 16, 32) or h not in (8, 16, 32):
+        sys.exit(f'{path}: textures must be 8, 16 or 32 px per side, not {w}x{h}')
+    colors = img.getcolors(16)
+    if colors is None:
+        sys.exit(f'{path}: more than 16 colours')
+    palette = [c for _, c in colors] + [(0, 0, 0)] * (16 - len(colors))
+    index = {c: i for i, c in enumerate(palette[:len(colors)])}
+    px = [index[img.getpixel((x, y))] for y in range(h) for x in range(w)]
+    data = struct.pack('<BBxx', w.bit_length() - 1, h.bit_length() - 1)
+    data += b''.join(struct.pack('BBB', *c) for c in palette)
+    data += bytes(px[i] | px[i + 1] << 4 for i in range(0, len(px), 2))
+    return chunk(b'TEXR', data)
+
+
 def pack(desc, base):
     out = b'HG64' + struct.pack('<H', VERSION)
+    texture_ids = {}
+    for name, png in desc.get('textures', {}).items():
+        texture_ids[name] = len(texture_ids)
+        out += pack_texture(os.path.join(base, png))
+
     mesh_ids = {}
     for name, m in desc.get('meshes', {}).items():
-        verts, tris, colors = load_obj(os.path.join(base, m['obj']), m['height'], m['color'])
-        data = struct.pack('<HH', len(verts), len(tris))
-        data += b''.join(struct.pack('<hhh', *v) for v in verts)
+        verts, uvs, tris, colors = load_obj(os.path.join(base, m['obj']), m['height'], m['color'])
+        texture = texture_ids[m['texture']] if 'texture' in m else -1
+        if texture >= 0 and uvs is None:
+            sys.exit(f'mesh {name}: has a texture but the OBJ has no texture coordinates')
+        uvs = uvs or [(0, 0)] * len(verts)
+        data = struct.pack('<HHhxx', len(verts), len(tris), texture)
+        data += b''.join(struct.pack('<hhhhh', *v, *uv) for v, uv in zip(verts, uvs))
         data += b''.join(struct.pack('<HHHBBB', *t, *c) for t, c in zip(tris, colors))
         mesh_ids[name] = len(mesh_ids)
         out += chunk(b'MESH', data)

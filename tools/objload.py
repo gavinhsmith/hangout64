@@ -3,7 +3,8 @@
 The model is turned Y-up with its front facing -Z, centred on X/Z, feet at y = 0 and
 scaled to `height` units. Positions and texture coordinates are 8.8 fixed point (256 = 1
 unit, or the full texture). Each triangle gets `rgb` shaded by how much it faces a fixed
-light, so the shape reads without runtime lighting.
+light, so the shape reads without runtime lighting. Faces in the group "hidden" are skipped
+(see guy_uvs.py).
 """
 
 LIGHT = (0.4, 0.8, 0.45)  # roughly from above, front-right
@@ -13,15 +14,18 @@ def load_obj(path, height, rgb):
     """Returns (verts, uvs, tris, colors): fixed-point (x, y, z), fixed-point (u, v) per
     vertex or None if the model has no texture coordinates, (a, b, c) indices, (r, g, b)."""
     positions, texcoords, faces = [], [], []
+    hidden = False
     for line in open(path, encoding='utf-8'):
         parts = line.split()
+        if parts and parts[0] == 'g':
+            hidden = parts[1:] == ['hidden']
         if parts and parts[0] == 'v':
             x, y, z = map(float, parts[1:4])
             positions.append((-x, z, y))  # Z-up, front -Y  ->  Y-up, front -Z (a proper rotation)
         elif parts and parts[0] == 'vt':
             u, v = map(float, parts[1:3])
             texcoords.append((u, 1 - v))  # OBJ's v runs up; texture rows run down
-        elif parts and parts[0] == 'f':
+        elif parts and parts[0] == 'f' and not hidden:
             corners = []
             for p in parts[1:]:
                 refs = p.split('/')

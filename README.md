@@ -70,8 +70,9 @@ power of two if needed; they are drawn nearest-filtered and tinted by the model'
 Engine assets (like the avatar) are compiled in instead, with `tools/obj2c.py`. The avatar's
 texture is the atlas `assets/texture/guy_base.png` with `guy_coat.png` layered on top; the
 coat's greys are tinted with each player's coat colour at runtime by swapping palette
-entries. `tools/guy_uvs.py` maps the atlas onto the model (re-run it after re-exporting
-`guy.obj`, which drops the UVs):
+entries. `tools/guy_uvs.py` maps the atlas onto the model, stretching each face's region to fit it
+(cutting tapered faces along texel columns so stripes stay straight) and hiding the leg and
+arm ends. Run it on a fresh export of `guy.obj` (it rewrites the file and refuses to run twice):
 
 ```sh
 python3 tools/guy_uvs.py assets/model/guy.obj

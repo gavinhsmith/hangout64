@@ -234,6 +234,28 @@ int main(void)
     o = follow(o, CAM_UP | CAM_IN, p0, 300);
     assert(o.now.pitch == CAM_PITCH_MAX && o.now.dist == CAM_DIST_MIN);
 
+    /* Walking one way: nothing for a moment, then the camera slowly swings behind,
+     * until it's there. Walking toward it never turns it. */
+    world walk = w;
+    camera s = camera_init();
+    for (int i = 0; i < 300; i++) {
+        input in[MAX_PLAYERS] = {{MOVE_RIGHT, s.now.yaw}};
+        walk = world_update(walk, in);
+        s = camera_update(s, 0, &walk.players[0]);
+        if (i == 40)
+            assert(s.target.yaw == 0);
+        if (i == 60)
+            assert(s.target.yaw < 0 && s.target.yaw > -150);
+    }
+    assert(s.target.yaw < -450); /* strafing right circles, with the camera behind */
+    world toward = run(w, MOVE_BACK, 0, 1);
+    camera t = camera_init();
+    for (int i = 0; i < 200; i++) {
+        toward = run(toward, MOVE_BACK, 0, 1);
+        t = camera_update(t, 0, &toward.players[0]);
+    }
+    assert(t.target.yaw == 0);
+
     /* Standing on a part, the camera settles at its height; a jump from there only
      * raises the camera by half the jump. */
     camera onstep = follow(camera_init(), 0, &drop.players[0], 300);

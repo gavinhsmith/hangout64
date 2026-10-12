@@ -139,7 +139,8 @@ void avatar_build(int i, const uint8_t coat[3]);
 world world_update(world w, const input inputs[MAX_PLAYERS]);
 
 /* A camera is per viewer, not game state. It follows one player and eases toward
- * the orbit/zoom target set by that viewer's buttons. Platforms render with:
+ * the orbit/zoom target set by that viewer's buttons. After a moment of walking one way,
+ * it slowly swings round behind them (not when they walk toward it). Platforms render with:
  *   view:   translate(0, 0, -dist) rotateX(pitch) rotateY(-yaw) translate(-x, -y, -z)
  *   level:  as is
  *   player: translate(x, FLOOR_Y + y, z) rotateY(heading)                             */
@@ -153,6 +154,7 @@ typedef struct {
 typedef struct {
     view now, target;
     int ground; /* height of the last thing the followed player stood on */
+    int last_x, last_z, last_heading, walked; /* frames they've walked one way */
 } camera;
 
 #define CAM_PITCH_MAX 800

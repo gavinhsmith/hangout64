@@ -16,7 +16,8 @@ Currently a little guy walking around a checkered floor with a few parts to clim
 
 The guy walks around a checkered floor and turns to face where he's going; the camera
 eases after him. Movement is relative to the camera (forward = into the screen). Orbit and
-zoom ease too.
+zoom ease too. Walk one way for a moment and the camera slowly swings round behind him
+(except when he's walking toward it).
 
 | Platform | Move | Jump | Orbit camera | Zoom in / out | Exit |
 |---|---|---|---|---|---|

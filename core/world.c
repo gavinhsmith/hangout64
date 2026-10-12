@@ -1,4 +1,5 @@
 #include "world.h"
+#include <stdlib.h>
 
 static const place *level; /* the current place, set by world_init() */
 
@@ -16,6 +17,8 @@ mesh level_mesh = {.verts = level_verts, .colors = level_colors};
 #define STEP_HEIGHT 400 /* ledges up to this high are walked up, not jumped */
 #define EASE 8      /* the camera closes 1/EASE of the gap each frame */
 #define TURN_EASE 4 /* players turn faster than the camera follows */
+#define BEHIND_DELAY 45 /* frames of walking one way before the camera swings behind */
+#define BEHIND_SPEED 5  /* tenths of a degree per frame: 30 degrees a second */
 
 /* Append a quad (corners in order) as two triangles. Coordinates in thousandths. */
 static int add_quad(int t, const int c[4][3], const uint8_t color[3], int shade)
@@ -249,7 +252,7 @@ world world_update(world w, const input inputs[MAX_PLAYERS])
 camera camera_init(void)
 {
     view v = {0, CAM_FOCUS, 0, 0, 150, 6000};
-    return (camera){v, v, 0};
+    return (camera){.now = v, .target = v};
 }
 
 camera camera_update(camera c, unsigned buttons, const player *follow)
@@ -268,6 +271,19 @@ camera camera_update(camera c, unsigned buttons, const player *follow)
     if (buttons & CAM_IN)    c.target.dist -= ZOOM_SPEED;
     if (buttons & CAM_OUT)   c.target.dist += ZOOM_SPEED;
     c.target.pitch = clamp(c.target.pitch, CAM_PITCH_MIN, CAM_PITCH_MAX);
+
+    /* Walking one way (moving, and facing within a few degrees of last frame, which
+     * allows for the camera's own turning) for a while swings the camera behind them,
+     * unless they're walking toward it or you're orbiting. */
+    int moved = follow->x != c.last_x || follow->z != c.last_z;
+    int steady = abs(wrap3600(follow->target_heading - c.last_heading + 1800) - 1800) < 50;
+    c.walked = moved && steady && !(buttons & (CAM_LEFT | CAM_RIGHT)) ? c.walked + 1 : 0;
+    c.last_x = follow->x;
+    c.last_z = follow->z;
+    c.last_heading = follow->target_heading;
+    int behind = wrap3600(follow->target_heading - c.target.yaw + 1800) - 1800;
+    if (c.walked > BEHIND_DELAY && abs(behind) < 1350)
+        c.target.yaw += clamp(behind, -BEHIND_SPEED, BEHIND_SPEED);
     c.target.dist = clamp(c.target.dist, CAM_DIST_MIN, CAM_DIST_MAX);
 
     c.now.x = ease(c.now.x, c.target.x, EASE);

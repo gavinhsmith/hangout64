@@ -2,20 +2,18 @@
 #include <stdio.h>
 #include "world.h"
 
-/* D-pad moves, A/B/X/Y orbit, L/R zoom in/out. */
+/* D-pad moves, A jumps, R + D-pad orbits, X/Y zoom in/out. */
 static unsigned read_input(u32 keys)
 {
     unsigned in = 0;
-    if (keys & KEY_LEFT)  in |= MOVE_LEFT;
-    if (keys & KEY_RIGHT) in |= MOVE_RIGHT;
-    if (keys & KEY_UP)    in |= MOVE_FWD;
-    if (keys & KEY_DOWN)  in |= MOVE_BACK;
-    if (keys & KEY_Y)     in |= CAM_LEFT;
-    if (keys & KEY_A)     in |= CAM_RIGHT;
-    if (keys & KEY_X)     in |= CAM_UP;
-    if (keys & KEY_B)     in |= CAM_DOWN;
-    if (keys & KEY_L)     in |= CAM_IN;
-    if (keys & KEY_R)     in |= CAM_OUT;
+    int orbit = (keys & KEY_R) != 0;
+    if (keys & KEY_LEFT)  in |= orbit ? CAM_LEFT : MOVE_LEFT;
+    if (keys & KEY_RIGHT) in |= orbit ? CAM_RIGHT : MOVE_RIGHT;
+    if (keys & KEY_UP)    in |= orbit ? CAM_UP : MOVE_FWD;
+    if (keys & KEY_DOWN)  in |= orbit ? CAM_DOWN : MOVE_BACK;
+    if (keys & KEY_A)     in |= JUMP;
+    if (keys & KEY_X)     in |= CAM_IN;
+    if (keys & KEY_Y)     in |= CAM_OUT;
     return in;
 }
 
@@ -25,10 +23,10 @@ static int angle(int deci)
     return (deci % 3600 + 3600) % 3600 * DEGREES_IN_CIRCLE / 3600;
 }
 
-/* Hundredths of a unit -> f32. */
-static int f32h(int hundredths)
+/* Thousandths of a unit -> f32. */
+static int f32m(int thousandths)
 {
-    return hundredths * 4096 / 100;
+    return thousandths * 4096 / 1000;
 }
 
 /* v16 is 4.12 and only reaches +/-8, the floor needs +/-10: send half-size
@@ -54,7 +52,7 @@ int main(void)
 {
     videoSetMode(MODE_0_3D);
     consoleDemoInit(); /* text console on the bottom screen */
-    printf("hangout64\n\nD-pad:   move\nA/B/X/Y: orbit\nL/R:     zoom\nSTART:   exit\n");
+    printf("hangout64\n\nD-pad:     move\nA:         jump\nR + D-pad: orbit\nX/Y:       zoom\nSTART:     exit\n");
     glInit();
     glClearColor(3, 3, 5, 31);
     glClearPolyID(63);
@@ -74,13 +72,13 @@ int main(void)
 
         glMatrixMode(GL_MODELVIEW);
         glLoadIdentity();
-        glTranslatef32(0, 0, -f32h(w.cam.dist));
+        glTranslatef32(0, 0, -f32m(w.cam.dist));
         glRotateXi(angle(w.cam.pitch));
         glRotateYi(angle(-w.cam.yaw));
-        glTranslatef32(-f32h(w.cam.x), 0, -f32h(w.cam.z));
+        glTranslatef32(-f32m(w.cam.x), -f32m(w.cam.y), -f32m(w.cam.z));
         draw_mesh(&floor_mesh);
 
-        glTranslatef32(f32h(w.x), inttof32(FLOOR_Y), f32h(w.z));
+        glTranslatef32(f32m(w.x), inttof32(FLOOR_Y) + f32m(w.y), f32m(w.z));
         glRotateYi(angle(w.heading));
         draw_mesh(&guy_mesh);
 

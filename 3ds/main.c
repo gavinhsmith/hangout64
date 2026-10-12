@@ -47,7 +47,7 @@ static vertex *build_vbo(void)
     return vbo;
 }
 
-/* Circle pad moves, D-pad orbits, L/R zoom in/out. */
+/* Circle pad moves, A jumps, D-pad orbits, L/R zoom in/out. */
 static unsigned read_input(u32 keys)
 {
     unsigned in = 0;
@@ -61,6 +61,7 @@ static unsigned read_input(u32 keys)
     if (keys & KEY_DDOWN)      in |= CAM_DOWN;
     if (keys & KEY_L)          in |= CAM_IN;
     if (keys & KEY_R)          in |= CAM_OUT;
+    if (keys & KEY_A)          in |= JUMP;
     return in;
 }
 
@@ -68,7 +69,7 @@ int main(void)
 {
     gfxInitDefault();
     consoleInit(GFX_BOTTOM, NULL);
-    printf("hangout64\n\nCircle pad: move\nD-pad:      orbit\nL/R:        zoom\nSTART:      exit\n");
+    printf("hangout64\n\nCircle pad: move\nA:          jump\nD-pad:      orbit\nL/R:        zoom\nSTART:      exit\n");
 
     C3D_Init(C3D_DEFAULT_CMDBUF_SIZE);
     /* The top screen is physically rotated: its framebuffer is 240 wide, 400 tall. */
@@ -110,15 +111,15 @@ int main(void)
             break;
         w = world_update(w, read_input(hidKeysHeld()));
 
-        /* view = translate(0, 0, -dist) rotX(pitch) rotY(-yaw) translate(-cam.x, 0, -cam.z) */
+        /* view = translate(0, 0, -dist) rotX(pitch) rotY(-yaw) translate(-cam.x, -cam.y, -cam.z) */
         C3D_Mtx view, guy;
         Mtx_Identity(&view);
-        Mtx_Translate(&view, 0.0f, 0.0f, -w.cam.dist / 100.0f, true);
+        Mtx_Translate(&view, 0.0f, 0.0f, -w.cam.dist / 1000.0f, true);
         Mtx_RotateX(&view, C3D_AngleFromDegrees(w.cam.pitch / 10.0f), true);
         Mtx_RotateY(&view, C3D_AngleFromDegrees(-w.cam.yaw / 10.0f), true);
-        Mtx_Translate(&view, -w.cam.x / 100.0f, 0.0f, -w.cam.z / 100.0f, true);
+        Mtx_Translate(&view, -w.cam.x / 1000.0f, -w.cam.y / 1000.0f, -w.cam.z / 1000.0f, true);
         Mtx_Copy(&guy, &view);
-        Mtx_Translate(&guy, w.x / 100.0f, (float)FLOOR_Y, w.z / 100.0f, true);
+        Mtx_Translate(&guy, w.x / 1000.0f, FLOOR_Y + w.y / 1000.0f, w.z / 1000.0f, true);
         Mtx_RotateY(&guy, C3D_AngleFromDegrees(w.heading / 10.0f), true);
 
         C3D_FrameBegin(C3D_FRAME_SYNCDRAW);

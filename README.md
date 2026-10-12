@@ -18,14 +18,14 @@ The guy walks around a checkered floor and turns to face where he's going; the c
 eases after him. Movement is relative to the camera (forward = into the screen). Orbit and
 zoom ease too.
 
-| Platform | Move | Orbit camera | Zoom in / out | Exit |
-|---|---|---|---|---|
-| PC | WASD | Arrows | Q / E | Esc |
-| N64 | Stick | D-pad | C-up / C-down | — |
-| GameCube | Stick | C-stick / D-pad | L / R | START |
-| Wii Remote | D-pad | B + D-pad | − / + | HOME |
-| DS | D-pad | Y / A / X / B | L / R | START |
-| 3DS | Circle pad | D-pad | L / R | START |
+| Platform | Move | Jump | Orbit camera | Zoom in / out | Exit |
+|---|---|---|---|---|---|
+| PC | WASD | Space | Arrows | Q / E | Esc |
+| N64 | Stick | A | D-pad | C-up / C-down | — |
+| GameCube | Stick | A | C-stick / D-pad | L / R | START |
+| Wii Remote | D-pad | A | B + D-pad | − / + | HOME |
+| DS | D-pad | A | R + D-pad | X / Y | START |
+| 3DS | Circle pad | A | D-pad | L / R | START |
 
 On the Wii a GameCube pad works too, with the GameCube layout.
 

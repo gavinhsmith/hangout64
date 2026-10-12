@@ -113,19 +113,19 @@ static void draw_scene(const world *w)
     GX_SetTevOp(GX_TEVSTAGE0, GX_PASSCLR);
     GX_SetZMode(GX_TRUE, GX_LEQUAL, GX_TRUE);
 
-    /* view = translate(0, 0, -dist) rotX(pitch) rotY(-yaw) translate(-cam.x, 0, -cam.z) */
+    /* view = translate(0, 0, -dist) rotX(pitch) rotY(-yaw) translate(-cam.x, -cam.y, -cam.z) */
     Mtx rx, ry, t, rot, view, model, mv;
     guMtxRotDeg(rx, 'x', w->cam.pitch / 10.0f);
     guMtxRotDeg(ry, 'y', -w->cam.yaw / 10.0f);
     guMtxConcat(rx, ry, rot);
-    guMtxTrans(t, -w->cam.x / 100.0f, 0.0f, -w->cam.z / 100.0f);
+    guMtxTrans(t, -w->cam.x / 1000.0f, -w->cam.y / 1000.0f, -w->cam.z / 1000.0f);
     guMtxConcat(rot, t, view);
-    guMtxTransApply(view, view, 0.0f, 0.0f, -w->cam.dist / 100.0f);
+    guMtxTransApply(view, view, 0.0f, 0.0f, -w->cam.dist / 1000.0f);
     draw_mesh(&floor_mesh, view);
 
     /* guy = translate(x, FLOOR_Y, z) rotY(heading) */
     guMtxRotDeg(ry, 'y', w->heading / 10.0f);
-    guMtxTransApply(ry, model, w->x / 100.0f, (f32)FLOOR_Y, w->z / 100.0f);
+    guMtxTransApply(ry, model, w->x / 1000.0f, FLOOR_Y + w->y / 1000.0f, w->z / 1000.0f);
     guMtxConcat(view, model, mv);
     draw_mesh(&guy_mesh, mv);
 }
@@ -182,8 +182,8 @@ static void on_wiimote_power(s32 chan) { (void)chan; power_pressed = 1; }
 
 #define STICK_DEADZONE 32
 
-/* GC pad: stick moves, C-stick or D-pad orbits, L/R zoom in/out.
- * Wii Remote: D-pad moves, B + D-pad orbits, -/+ zoom. START / HOME sets *quit. */
+/* GC pad: stick moves, A jumps, C-stick or D-pad orbits, L/R zoom in/out.
+ * Wii Remote: D-pad moves, A jumps, B + D-pad orbits, -/+ zoom. START / HOME sets *quit. */
 static unsigned read_input(int *quit)
 {
     PAD_ScanPads();
@@ -200,6 +200,7 @@ static unsigned read_input(int *quit)
     if ((b & PAD_BUTTON_DOWN) || cy < -STICK_DEADZONE)  in |= CAM_DOWN;
     if (b & PAD_TRIGGER_L) in |= CAM_IN;
     if (b & PAD_TRIGGER_R) in |= CAM_OUT;
+    if (b & PAD_BUTTON_A)  in |= JUMP;
     *quit = (PAD_ButtonsDown(0) & PAD_BUTTON_START) != 0;
 #ifdef HW_RVL
     WPAD_ScanPads();
@@ -211,6 +212,7 @@ static unsigned read_input(int *quit)
     if (w & WPAD_BUTTON_DOWN)  in |= orbit ? CAM_DOWN : MOVE_BACK;
     if (w & WPAD_BUTTON_MINUS) in |= CAM_IN;
     if (w & WPAD_BUTTON_PLUS)  in |= CAM_OUT;
+    if (w & WPAD_BUTTON_A)     in |= JUMP;
     if ((WPAD_ButtonsDown(0) & WPAD_BUTTON_HOME) || power_pressed)
         *quit = 1;
 #endif

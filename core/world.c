@@ -5,9 +5,12 @@ static int16_t floor_verts[FLOOR_TRIS * 3][3];
 static uint8_t floor_colors[FLOOR_TRIS][3];
 const mesh floor_mesh = {floor_verts, floor_colors, FLOOR_TRIS};
 
-#define MOVE_SPEED 6 /* hundredths of a unit per frame */
+#define MOVE_SPEED 60 /* thousandths of a unit per frame */
+#define DIAGONAL 2896 /* 1/sqrt(2), scaled by 4096 */
 #define ORBIT_SPEED 20
-#define ZOOM_SPEED 10
+#define ZOOM_SPEED 100
+#define JUMP_SPEED 98 /* peaks at JUMP_SPEED^2 / (2 * GRAVITY) = 1.2 units after ~0.4 s */
+#define GRAVITY 4
 #define EASE 8      /* the camera closes 1/EASE of the gap each frame */
 #define TURN_EASE 4 /* the guy turns faster than the camera follows */
 
@@ -32,8 +35,8 @@ world world_init(void)
             }
         }
     }
-    view v = {0, 0, 0, 200, 500};
-    return (world){0, 0, 0, 0, v, v};
+    view v = {0, 0, 0, 0, 200, 5000};
+    return (world){0, 0, 0, 0, 0, 0, v, v};
 }
 
 static int clamp(int v, int lo, int hi)
@@ -81,8 +84,17 @@ world world_update(world w, unsigned input)
     int right = !!(input & MOVE_RIGHT) - !!(input & MOVE_LEFT);
     int fwd = !!(input & MOVE_FWD) - !!(input & MOVE_BACK);
     int s = isin(w.cam.yaw / 10), c = icos(w.cam.yaw / 10);
-    w.x = clamp(w.x + (right * c - fwd * s) * MOVE_SPEED / 4096, -GUY_LIMIT, GUY_LIMIT);
-    w.z = clamp(w.z + (-right * s - fwd * c) * MOVE_SPEED / 4096, -GUY_LIMIT, GUY_LIMIT);
+    int step = right && fwd ? MOVE_SPEED * DIAGONAL / 4096 : MOVE_SPEED; /* same speed diagonally */
+    w.x = clamp(w.x + (right * c - fwd * s) * step / 4096, -GUY_LIMIT, GUY_LIMIT);
+    w.z = clamp(w.z + (-right * s - fwd * c) * step / 4096, -GUY_LIMIT, GUY_LIMIT);
+
+    /* Jump from the floor; gravity brings him back. */
+    if ((input & JUMP) && w.y == 0)
+        w.vy = JUMP_SPEED;
+    w.y += w.vy;
+    w.vy -= GRAVITY;
+    if (w.y <= 0)
+        w.y = w.vy = 0;
 
     /* Face the way we're moving: the camera's yaw plus the stick direction
      * (forward 0, left +90, right -90, back 180; diagonals in between). */
@@ -100,6 +112,7 @@ world world_update(world w, unsigned input)
     w.heading = wrap3600(w.heading + ease(0, turn, TURN_EASE));
 
     w.target.x = w.x;
+    w.target.y = w.y / 2; /* rise a little with a jump so he stays in frame */
     w.target.z = w.z;
     if (input & CAM_LEFT)  w.target.yaw -= ORBIT_SPEED;
     if (input & CAM_RIGHT) w.target.yaw += ORBIT_SPEED;
@@ -111,6 +124,7 @@ world world_update(world w, unsigned input)
     w.target.dist = clamp(w.target.dist, CAM_DIST_MIN, CAM_DIST_MAX);
 
     w.cam.x = ease(w.cam.x, w.target.x, EASE);
+    w.cam.y = ease(w.cam.y, w.target.y, EASE);
     w.cam.z = ease(w.cam.z, w.target.z, EASE);
     w.cam.yaw = ease(w.cam.yaw, w.target.yaw, EASE);
     w.cam.pitch = ease(w.cam.pitch, w.target.pitch, EASE);

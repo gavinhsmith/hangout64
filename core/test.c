@@ -20,9 +20,9 @@ int main(void)
 
     /* Camera starts behind the guy looking down -Z: forward is -Z, right is +X. */
     world f = run(w, MOVE_FWD, 10);
-    assert(f.z == -60 && f.x == 0);
+    assert(f.z == -600 && f.x == 0);
     world r = run(w, MOVE_RIGHT, 10);
-    assert(r.x == 60 && r.z == 0);
+    assert(r.x == 600 && r.z == 0);
 
     /* The camera follows, lagging behind, then settles exactly on the guy. */
     assert(f.cam.z > f.z && f.cam.z < 0);
@@ -33,7 +33,7 @@ int main(void)
     world side = w;
     side.cam.yaw = side.target.yaw = 900;
     side = run(side, MOVE_FWD, 10);
-    assert(side.x == -60 && abs(side.z) <= 1);
+    assert(side.x == -600 && abs(side.z) <= 10);
 
     /* Orbit input eases the camera to its target; limits hold. */
     world o = run(w, CAM_RIGHT, 1);
@@ -42,6 +42,23 @@ int main(void)
     assert(o.target.pitch == CAM_PITCH_MAX && o.target.dist == CAM_DIST_MIN);
     assert(o.cam.pitch == CAM_PITCH_MAX && o.cam.dist == CAM_DIST_MIN);
     assert(run(w, MOVE_FWD, 1000).z == -GUY_LIMIT);
+
+    /* Diagonals move at the same speed (within rounding), not sqrt(2) faster. */
+    world d = run(w, MOVE_FWD | MOVE_RIGHT, 10);
+    int dist2 = d.x * d.x + d.z * d.z;
+    assert(d.x > 0 && d.z < 0 && dist2 > 580 * 580 && dist2 <= 600 * 600);
+
+    /* Jump: up about 1.2 units, back down, no jumping again mid-air. */
+    world j = run(w, JUMP, 1);
+    assert(j.y > 0 && j.vy > 0);
+    int peak = 0;
+    for (int i = 0; i < 100; i++) {
+        j = world_update(j, 0);
+        peak = j.y > peak ? j.y : peak;
+    }
+    assert(peak > 1100 && peak < 1300 && j.y == 0 && j.vy == 0);
+    world air = run(w, JUMP, 10);
+    assert(world_update(air, JUMP).vy < air.vy); /* holding jump in the air does nothing */
 
     /* The guy turns (the short way) to face where it moves. */
     assert(run(w, MOVE_RIGHT, 100).heading == 2700);

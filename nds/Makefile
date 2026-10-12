@@ -7,6 +7,9 @@ GAME_TITLE     := hangout64
 GAME_SUBTITLE1 := Spinning cube
 GAME_SUBTITLE2 := github.com/gavinhsmith/hangout64
 
+# Captured by ds_rules' %.elf rule at include time.
+LIBPATHS := -L$(DEVKITPRO)/libnds/lib
+
 include $(DEVKITARM)/ds_rules
 
 TARGET  := hangout64
@@ -18,7 +21,6 @@ CFLAGS  := -O2 -Wall $(ARCH) -DARM9 $(_EXTRADEFS) -I$(LIBNDS)/include -I../core
 LD       := $(CC)
 OFILES   := $(OBJS)
 LDFLAGS  := -specs=ds_arm9.specs $(ARCH)
-LIBPATHS := -L$(LIBNDS)/lib
 LIBS     := -lnds9 -lm
 
 all: $(TARGET).nds

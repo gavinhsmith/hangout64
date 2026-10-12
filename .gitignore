@@ -53,3 +53,13 @@ dkms.conf
 
 # debug information files
 *.dwo
+
+# Build output
+build/
+core/test_core
+*.z64
+*.dol
+*.nds
+*.3dsx
+*.smdh
+*.shbin

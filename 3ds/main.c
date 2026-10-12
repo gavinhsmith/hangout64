@@ -34,16 +34,16 @@ static vertex *add_mesh(vertex *out, const mesh *m)
 }
 
 /* Background quad (clip space, drawn with identity matrices), then the guy, then the
- * floor, all as triangles. Call after world_init() so the floor exists. */
+ * level, all as triangles. Call after world_init() so the level mesh exists. */
 static vertex *build_vbo(void)
 {
     static const float bg[4][2] = {{-1, -1}, {1, -1}, {1, 1}, {-1, 1}};
-    vertex *vbo = linearAlloc(sizeof(vertex) * (BG_VERTS + (guy_mesh.tris + floor_mesh.tris) * 3));
+    vertex *vbo = linearAlloc(sizeof(vertex) * (BG_VERTS + (guy_mesh.tris + level_mesh.tris) * 3));
     vertex *out = vbo;
     for (int i = 0; i < 6; i++)
         *out++ = (vertex){{bg[quad_tris[i]][0], bg[quad_tris[i]][1], -0.5f}, {0.1f, 0.1f, 0.15f}};
     out = add_mesh(out, &guy_mesh);
-    add_mesh(out, &floor_mesh);
+    add_mesh(out, &level_mesh);
     return vbo;
 }
 
@@ -89,7 +89,8 @@ int main(void)
     AttrInfo_AddLoader(attr, 0, GPU_FLOAT, 3);
     AttrInfo_AddLoader(attr, 1, GPU_FLOAT, 3);
 
-    world w = world_init();
+    world w = world_init(1);
+    camera cam = camera_init();
     vertex *vbo = build_vbo();
     C3D_BufInfo *buf = C3D_GetBufInfo();
     BufInfo_Init(buf);
@@ -109,18 +110,19 @@ int main(void)
         hidScanInput();
         if (hidKeysDown() & KEY_START)
             break;
-        w = world_update(w, read_input(hidKeysHeld()));
+        unsigned b = read_input(hidKeysHeld());
+        input in[MAX_PLAYERS] = {{b, cam.now.yaw}};
+        w = world_update(w, in);
+        cam = camera_update(cam, b, &w.players[0]);
 
-        /* view = translate(0, 0, -dist) rotX(pitch) rotY(-yaw) translate(-cam.x, -cam.y, -cam.z) */
-        C3D_Mtx view, guy;
+        /* view = translate(0, 0, -dist) rotX(pitch) rotY(-yaw) translate(-x, -y, -z) */
+        const view *v = &cam.now;
+        C3D_Mtx view;
         Mtx_Identity(&view);
-        Mtx_Translate(&view, 0.0f, 0.0f, -w.cam.dist / 1000.0f, true);
-        Mtx_RotateX(&view, C3D_AngleFromDegrees(w.cam.pitch / 10.0f), true);
-        Mtx_RotateY(&view, C3D_AngleFromDegrees(-w.cam.yaw / 10.0f), true);
-        Mtx_Translate(&view, -w.cam.x / 1000.0f, -w.cam.y / 1000.0f, -w.cam.z / 1000.0f, true);
-        Mtx_Copy(&guy, &view);
-        Mtx_Translate(&guy, w.x / 1000.0f, FLOOR_Y + w.y / 1000.0f, w.z / 1000.0f, true);
-        Mtx_RotateY(&guy, C3D_AngleFromDegrees(w.heading / 10.0f), true);
+        Mtx_Translate(&view, 0.0f, 0.0f, -v->dist / 1000.0f, true);
+        Mtx_RotateX(&view, C3D_AngleFromDegrees(v->pitch / 10.0f), true);
+        Mtx_RotateY(&view, C3D_AngleFromDegrees(-v->yaw / 10.0f), true);
+        Mtx_Translate(&view, -v->x / 1000.0f, -v->y / 1000.0f, -v->z / 1000.0f, true);
 
         C3D_FrameBegin(C3D_FRAME_SYNCDRAW);
         C3D_RenderTargetClear(top, C3D_CLEAR_ALL, 0x000000FF, 0);
@@ -135,10 +137,17 @@ int main(void)
 
         C3D_DepthTest(true, GPU_GREATER, GPU_WRITE_ALL);
         C3D_FVUnifMtx4x4(GPU_VERTEX_SHADER, u_proj, &proj);
-        C3D_FVUnifMtx4x4(GPU_VERTEX_SHADER, u_mv, &guy);
-        C3D_DrawArrays(GPU_TRIANGLES, BG_VERTS, guy_mesh.tris * 3);
+        for (int i = 0; i < w.player_count; i++) {
+            const player *p = &w.players[i];
+            C3D_Mtx m;
+            Mtx_Copy(&m, &view);
+            Mtx_Translate(&m, p->x / 1000.0f, FLOOR_Y + p->y / 1000.0f, p->z / 1000.0f, true);
+            Mtx_RotateY(&m, C3D_AngleFromDegrees(p->heading / 10.0f), true);
+            C3D_FVUnifMtx4x4(GPU_VERTEX_SHADER, u_mv, &m);
+            C3D_DrawArrays(GPU_TRIANGLES, BG_VERTS, guy_mesh.tris * 3);
+        }
         C3D_FVUnifMtx4x4(GPU_VERTEX_SHADER, u_mv, &view);
-        C3D_DrawArrays(GPU_TRIANGLES, BG_VERTS + guy_mesh.tris * 3, floor_mesh.tris * 3);
+        C3D_DrawArrays(GPU_TRIANGLES, BG_VERTS + guy_mesh.tris * 3, level_mesh.tris * 3);
         C3D_FrameEnd(0);
     }
 

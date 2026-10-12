@@ -64,7 +64,8 @@ int main(void)
     gluPerspective(53, 256.0 / 192.0, 0.2, 100);
     glPolyFmt(POLY_ALPHA(31) | POLY_CULL_NONE);
 
-    world w = world_init();
+    world w = world_init(1);
+    camera cam = camera_init();
     for (;;) {
         scanKeys();
         if (keysDown() & KEY_START)
@@ -72,19 +73,28 @@ int main(void)
 
         glMatrixMode(GL_MODELVIEW);
         glLoadIdentity();
-        glTranslatef32(0, 0, -f32m(w.cam.dist));
-        glRotateXi(angle(w.cam.pitch));
-        glRotateYi(angle(-w.cam.yaw));
-        glTranslatef32(-f32m(w.cam.x), -f32m(w.cam.y), -f32m(w.cam.z));
-        draw_mesh(&floor_mesh);
+        const view *v = &cam.now;
+        glTranslatef32(0, 0, -f32m(v->dist));
+        glRotateXi(angle(v->pitch));
+        glRotateYi(angle(-v->yaw));
+        glTranslatef32(-f32m(v->x), -f32m(v->y), -f32m(v->z));
+        draw_mesh(&level_mesh);
 
-        glTranslatef32(f32m(w.x), inttof32(FLOOR_Y) + f32m(w.y), f32m(w.z));
-        glRotateYi(angle(w.heading));
-        draw_mesh(&guy_mesh);
+        for (int i = 0; i < w.player_count; i++) {
+            const player *p = &w.players[i];
+            glPushMatrix();
+            glTranslatef32(f32m(p->x), inttof32(FLOOR_Y) + f32m(p->y), f32m(p->z));
+            glRotateYi(angle(p->heading));
+            draw_mesh(&guy_mesh);
+            glPopMatrix(1);
+        }
 
         glFlush(0);
         swiWaitForVBlank();
-        w = world_update(w, read_input(keysHeld()));
+        unsigned b = read_input(keysHeld());
+        input in[MAX_PLAYERS] = {{b, cam.now.yaw}};
+        w = world_update(w, in);
+        cam = camera_update(cam, b, &w.players[0]);
     }
     return 0;
 }

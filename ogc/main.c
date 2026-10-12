@@ -96,7 +96,7 @@ static void draw_mesh(const mesh *m, Mtx mv)
 }
 
 /* Pass 1: the 3D scene into the top-left 320x240 of the EFB. */
-static void draw_scene(const world *w)
+static void draw_scene(const world *w, const view *v)
 {
     GX_SetViewport(0, 0, SCREEN_W, SCREEN_H, 0, 1);
     GX_SetScissor(0, 0, SCREEN_W, SCREEN_H);
@@ -113,21 +113,24 @@ static void draw_scene(const world *w)
     GX_SetTevOp(GX_TEVSTAGE0, GX_PASSCLR);
     GX_SetZMode(GX_TRUE, GX_LEQUAL, GX_TRUE);
 
-    /* view = translate(0, 0, -dist) rotX(pitch) rotY(-yaw) translate(-cam.x, -cam.y, -cam.z) */
+    /* view = translate(0, 0, -dist) rotX(pitch) rotY(-yaw) translate(-x, -y, -z) */
     Mtx rx, ry, t, rot, view, model, mv;
-    guMtxRotDeg(rx, 'x', w->cam.pitch / 10.0f);
-    guMtxRotDeg(ry, 'y', -w->cam.yaw / 10.0f);
+    guMtxRotDeg(rx, 'x', v->pitch / 10.0f);
+    guMtxRotDeg(ry, 'y', -v->yaw / 10.0f);
     guMtxConcat(rx, ry, rot);
-    guMtxTrans(t, -w->cam.x / 1000.0f, -w->cam.y / 1000.0f, -w->cam.z / 1000.0f);
+    guMtxTrans(t, -v->x / 1000.0f, -v->y / 1000.0f, -v->z / 1000.0f);
     guMtxConcat(rot, t, view);
-    guMtxTransApply(view, view, 0.0f, 0.0f, -w->cam.dist / 1000.0f);
-    draw_mesh(&floor_mesh, view);
+    guMtxTransApply(view, view, 0.0f, 0.0f, -v->dist / 1000.0f);
+    draw_mesh(&level_mesh, view);
 
-    /* guy = translate(x, FLOOR_Y, z) rotY(heading) */
-    guMtxRotDeg(ry, 'y', w->heading / 10.0f);
-    guMtxTransApply(ry, model, w->x / 1000.0f, FLOOR_Y + w->y / 1000.0f, w->z / 1000.0f);
-    guMtxConcat(view, model, mv);
-    draw_mesh(&guy_mesh, mv);
+    /* player = translate(x, FLOOR_Y + y, z) rotY(heading) */
+    for (int i = 0; i < w->player_count; i++) {
+        const player *p = &w->players[i];
+        guMtxRotDeg(ry, 'y', p->heading / 10.0f);
+        guMtxTransApply(ry, model, p->x / 1000.0f, FLOOR_Y + p->y / 1000.0f, p->z / 1000.0f);
+        guMtxConcat(view, model, mv);
+        draw_mesh(&guy_mesh, mv);
+    }
 }
 
 /* Pass 2: copy the 320x240 frame to a texture and draw it over the whole EFB with
@@ -230,9 +233,10 @@ int main(void)
 #endif
 
     int fb = 0, quit = 0;
-    world w = world_init();
+    world w = world_init(1);
+    camera cam = camera_init();
     while (!quit) {
-        draw_scene(&w);
+        draw_scene(&w, &cam.now);
         draw_upscaled();
 
         GX_DrawDone();
@@ -243,7 +247,10 @@ int main(void)
         VIDEO_SetNextFramebuffer(xfb[fb]);
         VIDEO_Flush();
         VIDEO_WaitVSync();
-        w = world_update(w, read_input(&quit));
+        unsigned b = read_input(&quit);
+        input in[MAX_PLAYERS] = {{b, cam.now.yaw}};
+        w = world_update(w, in);
+        cam = camera_update(cam, b, &w.players[0]);
     }
 #ifdef HW_RVL
     if (power_pressed)

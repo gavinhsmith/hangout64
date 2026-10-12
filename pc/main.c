@@ -42,7 +42,7 @@ static void draw_mesh(const mesh *m)
     glEnd();
 }
 
-static void draw_scene(const world *w)
+static void draw_scene(const world *w, const view *v)
 {
     glViewport(0, 0, SCREEN_W, SCREEN_H);
     glClearColor(0.1f, 0.1f, 0.15f, 1.0f);
@@ -55,15 +55,20 @@ static void draw_scene(const world *w)
     glFrustum(-0.1333, 0.1333, -0.1, 0.1, 0.2, 100.0);
     glMatrixMode(GL_MODELVIEW);
     glLoadIdentity();
-    glTranslatef(0.0f, 0.0f, -w->cam.dist / 1000.0f);
-    glRotatef(w->cam.pitch / 10.0f, 1.0f, 0.0f, 0.0f);
-    glRotatef(-w->cam.yaw / 10.0f, 0.0f, 1.0f, 0.0f);
-    glTranslatef(-w->cam.x / 1000.0f, -w->cam.y / 1000.0f, -w->cam.z / 1000.0f);
-    draw_mesh(&floor_mesh);
+    glTranslatef(0.0f, 0.0f, -v->dist / 1000.0f);
+    glRotatef(v->pitch / 10.0f, 1.0f, 0.0f, 0.0f);
+    glRotatef(-v->yaw / 10.0f, 0.0f, 1.0f, 0.0f);
+    glTranslatef(-v->x / 1000.0f, -v->y / 1000.0f, -v->z / 1000.0f);
+    draw_mesh(&level_mesh);
 
-    glTranslatef(w->x / 1000.0f, FLOOR_Y + w->y / 1000.0f, w->z / 1000.0f);
-    glRotatef(w->heading / 10.0f, 0.0f, 1.0f, 0.0f);
-    draw_mesh(&guy_mesh);
+    for (int i = 0; i < w->player_count; i++) {
+        const player *p = &w->players[i];
+        glPushMatrix();
+        glTranslatef(p->x / 1000.0f, FLOOR_Y + p->y / 1000.0f, p->z / 1000.0f);
+        glRotatef(p->heading / 10.0f, 0.0f, 1.0f, 0.0f);
+        draw_mesh(&guy_mesh);
+        glPopMatrix();
+    }
 }
 
 /* Grab the 320x240 frame and draw it integer-scaled, centred, black bars around. */
@@ -129,7 +134,8 @@ int main(int argc, char **argv)
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
 
-    world w = world_init();
+    world w = world_init(1);
+    camera cam = camera_init();
     double next = (double)SDL_GetTicks();
     for (;;) {
         SDL_Event e;
@@ -140,10 +146,13 @@ int main(int argc, char **argv)
         }
         /* Fixed 60 Hz update regardless of monitor refresh rate. */
         while ((double)SDL_GetTicks() >= next) {
-            w = world_update(w, read_input());
+            unsigned b = read_input();
+            input in[MAX_PLAYERS] = {{b, cam.now.yaw}};
+            w = world_update(w, in);
+            cam = camera_update(cam, b, &w.players[0]);
             next += TICK_MS;
         }
-        draw_scene(&w);
+        draw_scene(&w, &cam.now);
         present(win, tex);
     }
 done:

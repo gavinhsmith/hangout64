@@ -1,42 +1,87 @@
 #include "world.h"
 
+/* A small test course: a wall, three steps up to a floating platform, and a pillar. */
+const part level_parts[] = {
+    {-4000, 1000, 0, 1000, 2000, 6000, {110, 120, 140}},     /* wall */
+    {0, 300, -4000, 2000, 600, 2000, {196, 40, 28}},         /* step 1, top 0.6 */
+    {0, 600, -6000, 2000, 1200, 2000, {245, 205, 48}},       /* step 2, top 1.2 */
+    {0, 900, -8000, 2000, 1800, 2000, {75, 151, 75}},        /* step 3, top 1.8 */
+    {3500, 1650, -8000, 3000, 300, 2000, {13, 105, 172}},    /* floating platform, top 1.8 */
+    {6000, 1500, -4000, 1000, 3000, 1000, {107, 50, 124}},   /* pillar */
+};
+const int level_part_count = sizeof level_parts / sizeof level_parts[0];
+
 #define FLOOR_TRIS (FLOOR_TILES * FLOOR_TILES * 2)
-static int16_t floor_verts[FLOOR_TRIS * 3][3];
-static uint8_t floor_colors[FLOOR_TRIS][3];
-const mesh floor_mesh = {floor_verts, floor_colors, FLOOR_TRIS};
+#define PART_TRIS 10 /* 5 faces: no bottom */
+#define LEVEL_TRIS (FLOOR_TRIS + PART_TRIS * (int)(sizeof level_parts / sizeof level_parts[0]))
+static int16_t level_verts[LEVEL_TRIS * 3][3];
+static uint8_t level_colors[LEVEL_TRIS][3];
+const mesh level_mesh = {level_verts, level_colors, LEVEL_TRIS};
 
 #define MOVE_SPEED 60 /* thousandths of a unit per frame */
 #define DIAGONAL 2896 /* 1/sqrt(2), scaled by 4096 */
 #define ORBIT_SPEED 20
 #define ZOOM_SPEED 100
-#define JUMP_SPEED 98 /* peaks at JUMP_SPEED^2 / (2 * GRAVITY) = 1.2 units after ~0.4 s */
+#define JUMP_SPEED 98 /* peaks about 1.15 units up after ~0.4 s */
 #define GRAVITY 4
 #define EASE 8      /* the camera closes 1/EASE of the gap each frame */
-#define TURN_EASE 4 /* the guy turns faster than the camera follows */
+#define TURN_EASE 4 /* players turn faster than the camera follows */
 
-world world_init(void)
+/* Append a quad (corners in order) as two triangles. Coordinates in thousandths. */
+static int add_quad(int t, const int c[4][3], const uint8_t color[3], int shade)
 {
-    static const int tri_corners[6] = {0, 1, 2, 0, 2, 3};
+    static const int corner[6] = {0, 1, 2, 0, 2, 3};
+    for (int k = 0; k < 6; k++)
+        for (int a = 0; a < 3; a++)
+            level_verts[t * 3 + k][a] = c[corner[k]][a] * MESH_ONE / 1000;
+    for (int i = 0; i < 2; i++)
+        for (int a = 0; a < 3; a++)
+            level_colors[t + i][a] = color[a] * shade / 100;
+    return t + 2;
+}
+
+static void build_level_mesh(void)
+{
+    const int fy = FLOOR_Y * 1000;
+    int t = 0;
     for (int i = 0; i < FLOOR_TILES; i++) {
         for (int j = 0; j < FLOOR_TILES; j++) {
-            int tile = i * FLOOR_TILES + j, x0 = 2 * i - FLOOR_TILES, z0 = 2 * j - FLOOR_TILES;
-            const int corners[4][2] = {{x0, z0}, {x0, z0 + 2}, {x0 + 2, z0 + 2}, {x0 + 2, z0}};
-            for (int k = 0; k < 6; k++) {
-                int16_t *v = floor_verts[tile * 6 + k];
-                v[0] = corners[tri_corners[k]][0] * MESH_ONE;
-                v[1] = FLOOR_Y * MESH_ONE;
-                v[2] = corners[tri_corners[k]][1] * MESH_ONE;
-            }
+            int x0 = (2 * i - FLOOR_TILES) * 1000, z0 = (2 * j - FLOOR_TILES) * 1000;
+            const int c[4][3] = {{x0, fy, z0}, {x0, fy, z0 + 2000}, {x0 + 2000, fy, z0 + 2000}, {x0 + 2000, fy, z0}};
             uint8_t shade = (i + j) % 2 ? 60 : 90;
-            for (int t = 0; t < 2; t++) {
-                floor_colors[tile * 2 + t][0] = shade;
-                floor_colors[tile * 2 + t][1] = shade;
-                floor_colors[tile * 2 + t][2] = shade + 10;
-            }
+            const uint8_t color[3] = {shade, shade, shade + 10};
+            t = add_quad(t, c, color, 100);
         }
     }
-    view v = {0, 0, 0, 0, 200, 5000};
-    return (world){0, 0, 0, 0, 0, 0, v, v};
+    /* Parts: flat-shaded by face direction so the edges read without lighting. */
+    for (int i = 0; i < level_part_count; i++) {
+        const part *p = &level_parts[i];
+        int x0 = p->x - p->sx / 2, x1 = p->x + p->sx / 2;
+        int y0 = fy + p->y - p->sy / 2, y1 = fy + p->y + p->sy / 2;
+        int z0 = p->z - p->sz / 2, z1 = p->z + p->sz / 2;
+        const int faces[5][4][3] = {
+            {{x0, y1, z0}, {x0, y1, z1}, {x1, y1, z1}, {x1, y1, z0}}, /* top */
+            {{x1, y0, z0}, {x1, y1, z0}, {x1, y1, z1}, {x1, y0, z1}}, /* +X */
+            {{x0, y0, z1}, {x0, y1, z1}, {x0, y1, z0}, {x0, y0, z0}}, /* -X */
+            {{x0, y0, z1}, {x1, y0, z1}, {x1, y1, z1}, {x0, y1, z1}}, /* +Z */
+            {{x1, y0, z0}, {x0, y0, z0}, {x0, y1, z0}, {x1, y1, z0}}, /* -Z */
+        };
+        static const int shade[5] = {100, 80, 80, 65, 65};
+        for (int f = 0; f < 5; f++)
+            t = add_quad(t, faces[f], p->color, shade[f]);
+    }
+}
+
+world world_init(int players)
+{
+    build_level_mesh();
+    world w = {0};
+    w.player_count = players;
+    for (int i = 0; i < players; i++) {
+        w.players[i].x = i * 1500; /* side by side, standing on the floor */
+        w.players[i].on_ground = 1;
+    }
+    return w;
 }
 
 static int clamp(int v, int lo, int hi)
@@ -78,25 +123,61 @@ static int wrap3600(int a)
     return (a % 3600 + 3600) % 3600;
 }
 
-world world_update(world w, unsigned input)
+/* The part the player's box overlaps, or NULL. Touching (e.g. standing on top) isn't
+ * overlapping. */
+static const part *hit_part(const player *p)
+{
+    for (int i = 0; i < level_part_count; i++) {
+        const part *q = &level_parts[i];
+        if (p->x + PLAYER_RADIUS > q->x - q->sx / 2 && p->x - PLAYER_RADIUS < q->x + q->sx / 2 &&
+            p->z + PLAYER_RADIUS > q->z - q->sz / 2 && p->z - PLAYER_RADIUS < q->z + q->sz / 2 &&
+            p->y + PLAYER_HEIGHT > q->y - q->sy / 2 && p->y < q->y + q->sy / 2)
+            return q;
+    }
+    return 0;
+}
+
+static player update_player(player p, input in)
 {
     /* Strafe relative to the camera: forward is away from it, along the ground. */
-    int right = !!(input & MOVE_RIGHT) - !!(input & MOVE_LEFT);
-    int fwd = !!(input & MOVE_FWD) - !!(input & MOVE_BACK);
-    int s = isin(w.cam.yaw / 10), c = icos(w.cam.yaw / 10);
+    int right = !!(in.buttons & MOVE_RIGHT) - !!(in.buttons & MOVE_LEFT);
+    int fwd = !!(in.buttons & MOVE_FWD) - !!(in.buttons & MOVE_BACK);
+    int s = isin(in.yaw / 10), c = icos(in.yaw / 10);
     int step = right && fwd ? MOVE_SPEED * DIAGONAL / 4096 : MOVE_SPEED; /* same speed diagonally */
-    w.x = clamp(w.x + (right * c - fwd * s) * step / 4096, -GUY_LIMIT, GUY_LIMIT);
-    w.z = clamp(w.z + (-right * s - fwd * c) * step / 4096, -GUY_LIMIT, GUY_LIMIT);
 
-    /* Jump from the floor; gravity brings him back. */
-    if ((input & JUMP) && w.y == 0)
-        w.vy = JUMP_SPEED;
-    w.y += w.vy;
-    w.vy -= GRAVITY;
-    if (w.y <= 0)
-        w.y = w.vy = 0;
+    /* One axis at a time, so walls block one direction and you slide along the other. */
+    int dx = (right * c - fwd * s) * step / 4096, dz = (-right * s - fwd * c) * step / 4096;
+    p.x = clamp(p.x + dx, -PLAYER_LIMIT, PLAYER_LIMIT);
+    if (hit_part(&p))
+        p.x -= dx;
+    p.z = clamp(p.z + dz, -PLAYER_LIMIT, PLAYER_LIMIT);
+    if (hit_part(&p))
+        p.z -= dz;
 
-    /* Face the way we're moving: the camera's yaw plus the stick direction
+    /* Jump from the floor or a part; gravity brings you back. */
+    if ((in.buttons & JUMP) && p.on_ground)
+        p.vy = JUMP_SPEED;
+    /* Gravity first, so standing still still pushes into the ground each frame and
+     * on_ground stays set. */
+    p.vy -= GRAVITY;
+    int dy = p.vy;
+    p.y += dy;
+    p.on_ground = 0;
+    const part *q = hit_part(&p);
+    if (q && dy <= 0) { /* landed on top */
+        p.y = q->y + q->sy / 2;
+        p.vy = 0;
+        p.on_ground = 1;
+    } else if (q) { /* bumped your head */
+        p.y = q->y - q->sy / 2 - PLAYER_HEIGHT;
+        p.vy = 0;
+    }
+    if (p.y <= 0) {
+        p.y = p.vy = 0;
+        p.on_ground = 1;
+    }
+
+    /* Face the way you're moving: the camera's yaw plus the stick direction
      * (forward 0, left +90, right -90, back 180; diagonals in between). */
     if (right || fwd) {
         static const int offset[3][3] = {
@@ -105,29 +186,50 @@ world world_update(world w, unsigned input)
             {1800, 0, 0},        /* right =  0 */
             {-1350, -900, -450}, /* right =  1 */
         };
-        w.target_heading = wrap3600(w.cam.yaw + offset[right + 1][fwd + 1]);
+        p.target_heading = wrap3600(in.yaw + offset[right + 1][fwd + 1]);
     }
     /* Turn the short way round. */
-    int turn = wrap3600(w.target_heading - w.heading + 1800) - 1800;
-    w.heading = wrap3600(w.heading + ease(0, turn, TURN_EASE));
+    int turn = wrap3600(p.target_heading - p.heading + 1800) - 1800;
+    p.heading = wrap3600(p.heading + ease(0, turn, TURN_EASE));
+    return p;
+}
 
-    w.target.x = w.x;
-    w.target.y = w.y / 2; /* rise a little with a jump so he stays in frame */
-    w.target.z = w.z;
-    if (input & CAM_LEFT)  w.target.yaw -= ORBIT_SPEED;
-    if (input & CAM_RIGHT) w.target.yaw += ORBIT_SPEED;
-    if (input & CAM_UP)    w.target.pitch += ORBIT_SPEED;
-    if (input & CAM_DOWN)  w.target.pitch -= ORBIT_SPEED;
-    if (input & CAM_IN)    w.target.dist -= ZOOM_SPEED;
-    if (input & CAM_OUT)   w.target.dist += ZOOM_SPEED;
-    w.target.pitch = clamp(w.target.pitch, -CAM_PITCH_MAX, CAM_PITCH_MAX);
-    w.target.dist = clamp(w.target.dist, CAM_DIST_MIN, CAM_DIST_MAX);
-
-    w.cam.x = ease(w.cam.x, w.target.x, EASE);
-    w.cam.y = ease(w.cam.y, w.target.y, EASE);
-    w.cam.z = ease(w.cam.z, w.target.z, EASE);
-    w.cam.yaw = ease(w.cam.yaw, w.target.yaw, EASE);
-    w.cam.pitch = ease(w.cam.pitch, w.target.pitch, EASE);
-    w.cam.dist = ease(w.cam.dist, w.target.dist, EASE);
+world world_update(world w, const input inputs[MAX_PLAYERS])
+{
+    for (int i = 0; i < w.player_count; i++)
+        w.players[i] = update_player(w.players[i], inputs[i]);
     return w;
+}
+
+camera camera_init(void)
+{
+    view v = {0, 0, 0, 0, 200, 5000};
+    return (camera){v, v, 0};
+}
+
+camera camera_update(camera c, unsigned buttons, const player *follow)
+{
+    c.target.x = follow->x;
+    /* Follow the ground they stand on fully, but only half of a jump, so they stay in
+     * frame and you still see the height. Dropping below it (walking off) counts too. */
+    if (follow->on_ground || follow->y < c.ground)
+        c.ground = follow->y;
+    c.target.y = c.ground + (follow->y - c.ground) / 2;
+    c.target.z = follow->z;
+    if (buttons & CAM_LEFT)  c.target.yaw -= ORBIT_SPEED;
+    if (buttons & CAM_RIGHT) c.target.yaw += ORBIT_SPEED;
+    if (buttons & CAM_UP)    c.target.pitch += ORBIT_SPEED;
+    if (buttons & CAM_DOWN)  c.target.pitch -= ORBIT_SPEED;
+    if (buttons & CAM_IN)    c.target.dist -= ZOOM_SPEED;
+    if (buttons & CAM_OUT)   c.target.dist += ZOOM_SPEED;
+    c.target.pitch = clamp(c.target.pitch, -CAM_PITCH_MAX, CAM_PITCH_MAX);
+    c.target.dist = clamp(c.target.dist, CAM_DIST_MIN, CAM_DIST_MAX);
+
+    c.now.x = ease(c.now.x, c.target.x, EASE);
+    c.now.y = ease(c.now.y, c.target.y, EASE);
+    c.now.z = ease(c.now.z, c.target.z, EASE);
+    c.now.yaw = ease(c.now.yaw, c.target.yaw, EASE);
+    c.now.pitch = ease(c.now.pitch, c.target.pitch, EASE);
+    c.now.dist = ease(c.now.dist, c.target.dist, EASE);
+    return c;
 }

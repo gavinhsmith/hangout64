@@ -53,7 +53,8 @@ int main(void)
     glEnable(GL_DEPTH_TEST);
     glClearColor(0.1f, 0.1f, 0.15f, 1.0f);
 
-    world w = world_init();
+    world w = world_init(1);
+    camera cam = camera_init();
     for (;;) {
         rdpq_attach(display_get(), display_get_zbuf());
         gl_context_begin();
@@ -61,18 +62,27 @@ int main(void)
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
         glMatrixMode(GL_MODELVIEW);
         glLoadIdentity();
-        glTranslatef(0.0f, 0.0f, -w.cam.dist / 1000.0f);
-        glRotatef(w.cam.pitch / 10.0f, 1.0f, 0.0f, 0.0f);
-        glRotatef(-w.cam.yaw / 10.0f, 0.0f, 1.0f, 0.0f);
-        glTranslatef(-w.cam.x / 1000.0f, -w.cam.y / 1000.0f, -w.cam.z / 1000.0f);
-        draw_mesh(&floor_mesh);
+        const view *v = &cam.now;
+        glTranslatef(0.0f, 0.0f, -v->dist / 1000.0f);
+        glRotatef(v->pitch / 10.0f, 1.0f, 0.0f, 0.0f);
+        glRotatef(-v->yaw / 10.0f, 0.0f, 1.0f, 0.0f);
+        glTranslatef(-v->x / 1000.0f, -v->y / 1000.0f, -v->z / 1000.0f);
+        draw_mesh(&level_mesh);
 
-        glTranslatef(w.x / 1000.0f, FLOOR_Y + w.y / 1000.0f, w.z / 1000.0f);
-        glRotatef(w.heading / 10.0f, 0.0f, 1.0f, 0.0f);
-        draw_mesh(&guy_mesh);
+        for (int i = 0; i < w.player_count; i++) {
+            const player *p = &w.players[i];
+            glPushMatrix();
+            glTranslatef(p->x / 1000.0f, FLOOR_Y + p->y / 1000.0f, p->z / 1000.0f);
+            glRotatef(p->heading / 10.0f, 0.0f, 1.0f, 0.0f);
+            draw_mesh(&guy_mesh);
+            glPopMatrix();
+        }
 
         gl_context_end();
         rdpq_detach_show();
-        w = world_update(w, read_input());
+        unsigned b = read_input();
+        input in[MAX_PLAYERS] = {{b, cam.now.yaw}};
+        w = world_update(w, in);
+        cam = camera_update(cam, b, &w.players[0]);
     }
 }

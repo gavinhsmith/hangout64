@@ -3,6 +3,9 @@ Multi-platform demo for a simple 3D homebrew title for Nintendo 64 and beyond.
 
 Currently a little guy walking around a checkered floor with a few parts to climb, rendered at 320x240 everywhere (DS: native 256x192) and scaled up.
 
+This is the prototype for **workbench64**, a small Roblox-like platform; see the
+[engine specification](docs/engine.md) for where it's going.
+
 | Folder | Platform | Library | Output |
 |---|---|---|---|
 | `core/` | shared game code (no platform headers) | — | — |

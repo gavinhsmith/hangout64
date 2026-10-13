@@ -536,7 +536,7 @@ What hangout64 already has, and what changes:
 | Rendering | Each `main.c` draws the level itself | Core draw list; ports render it their own way |
 | Timing | One update per vsync on consoles, fixed 60 Hz on PC | Fixed 30 Hz tick everywhere |
 | Avatar | 412-triangle guy, tinted coat, run hop | Count it against the budget; customisation as data |
-| Scripting | Lua 5.4.9 vendored in `third_party/lua`, measured by `bench/lua`; not in the game yet | §7 |
+| Scripting | Lua 5.4.9 as a submodule in `third_party/lua`, measured by `bench/lua`; not in the game yet | §7 |
 | UI, audio, networking, saves | None | §14, §9.4, §10, §11.4 |
 
 Suggested order of work:

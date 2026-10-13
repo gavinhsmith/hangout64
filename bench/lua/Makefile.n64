@@ -3,10 +3,10 @@
 BUILD_DIR = build/n64
 include $(N64_INST)/include/n64.mk
 
-LUA := ../../third_party/lua
 PYTHON ?= python3
-LUA_SRC := $(filter-out lua.c luac.c,$(notdir $(wildcard $(LUA)/*.c)))
-CFLAGS += -I$(LUA) -I.
+LUA32 := $(BUILD_DIR)/lua32
+include lua.mk
+CFLAGS += -I.
 OBJS = $(addprefix $(BUILD_DIR)/$(1)/,bench.o main_n64.o $(LUA_SRC:.c=.o))
 
 all: luabench64.z64 luabench32.z64
@@ -18,15 +18,15 @@ bench_lua.h: bench.lua embed.py
 $(BUILD_DIR)/64/%.o: $(LUA)/%.c
 	@mkdir -p $(dir $@)
 	$(N64_CC) -c $(filter-out -Werror,$(CFLAGS)) -o $@ $<
-$(BUILD_DIR)/32/%.o: $(LUA)/%.c
+$(BUILD_DIR)/32/%.o: $(LUA32)/%.c | $(LUA32_HDR)
 	@mkdir -p $(dir $@)
-	$(N64_CC) -c $(filter-out -Werror,$(CFLAGS)) -DLUA_32BITS=1 -o $@ $<
+	$(N64_CC) -c $(filter-out -Werror,$(CFLAGS)) -o $@ $<
 $(BUILD_DIR)/64/%.o: %.c bench_lua.h
 	@mkdir -p $(dir $@)
-	$(N64_CC) -c $(CFLAGS) -o $@ $<
-$(BUILD_DIR)/32/%.o: %.c bench_lua.h
+	$(N64_CC) -c $(CFLAGS) -I$(LUA) -o $@ $<
+$(BUILD_DIR)/32/%.o: %.c bench_lua.h | $(LUA32_HDR)
 	@mkdir -p $(dir $@)
-	$(N64_CC) -c $(CFLAGS) -DLUA_32BITS=1 -o $@ $<
+	$(N64_CC) -c $(CFLAGS) -I$(LUA32) -o $@ $<
 
 $(BUILD_DIR)/luabench64.elf: $(call OBJS,64)
 $(BUILD_DIR)/luabench32.elf: $(call OBJS,32)

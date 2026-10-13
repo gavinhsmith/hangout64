@@ -13,11 +13,11 @@ include $(DEVKITARM)/ds_rules
 
 BUILD   := build/nds
 PYTHON  ?= python3
-LUA     := ../../third_party/lua
-LUA_SRC := $(filter-out lua.c luac.c,$(notdir $(wildcard $(LUA)/*.c)))
+LUA32   := $(BUILD)/lua32
+include lua.mk
 OBJS     = $(addprefix $(BUILD)/$(1)/,bench.o main_nds.o $(LUA_SRC:.c=.o))
 ARCH    := -march=armv5te -mtune=arm946e-s
-CFLAGS  := -O2 -Wall $(ARCH) -DARM9 $(_EXTRADEFS) -I$(LIBNDS)/include -I$(LUA) -I.
+CFLAGS  := -O2 -Wall $(ARCH) -DARM9 $(_EXTRADEFS) -I$(LIBNDS)/include -I.
 LD      := $(CC)
 LDFLAGS := -specs=ds_arm9.specs $(ARCH)
 LIBS    := -lnds9 -lm
@@ -30,15 +30,15 @@ bench_lua.h: bench.lua embed.py
 $(BUILD)/64/%.o: $(LUA)/%.c
 	@mkdir -p $(dir $@)
 	$(CC) $(CFLAGS) -c $< -o $@
-$(BUILD)/32/%.o: $(LUA)/%.c
-	@mkdir -p $(dir $@)
-	$(CC) $(CFLAGS) -DLUA_32BITS=1 -c $< -o $@
-$(BUILD)/64/%.o: %.c bench_lua.h
+$(BUILD)/32/%.o: $(LUA32)/%.c | $(LUA32_HDR)
 	@mkdir -p $(dir $@)
 	$(CC) $(CFLAGS) -c $< -o $@
-$(BUILD)/32/%.o: %.c bench_lua.h
+$(BUILD)/64/%.o: %.c bench_lua.h
 	@mkdir -p $(dir $@)
-	$(CC) $(CFLAGS) -DLUA_32BITS=1 -c $< -o $@
+	$(CC) $(CFLAGS) -I$(LUA) -c $< -o $@
+$(BUILD)/32/%.o: %.c bench_lua.h | $(LUA32_HDR)
+	@mkdir -p $(dir $@)
+	$(CC) $(CFLAGS) -I$(LUA32) -c $< -o $@
 
 # ds_rules' %.elf rule links $(OFILES).
 luabench64.nds: luabench64.elf

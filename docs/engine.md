@@ -29,7 +29,7 @@ Each item is marked:
    16-colour textures, static lighting.
 5. **The engine is not a general game engine.** *Decided.* No standalone export: experiences run
    inside workbench64, never as their own ROM or executable.
-6. **Untrusted content is validated on load.** *Decided.* Every `.ws64`, whatever its source, is
+6. **Untrusted content is validated on load.** *Decided.* Every `.wb64`, whatever its source, is
    bounds-checked before use, and scripts run in a sandbox.
 7. **Versions are explicit.** *Decided.* Engine, Lua API and file format each carry a version (§12).
 
@@ -37,7 +37,7 @@ Each item is marked:
 
 | Term | Meaning |
 |---|---|
-| Experience | A game made for workbench64, distributed as one `.ws64` file. |
+| Experience | A game made for workbench64, distributed as one `.wb64` file. |
 | Session (lobby) | A running instance of an experience: its players, shared state, and the scenes loaded for it. |
 | Scene | One world within an experience: parts, models and the assets they use. A session can hold any number. |
 | Part | The building block of every world (§5). |
@@ -54,7 +54,7 @@ Each item is marked:
 ```
            ┌──────────── core (portable C, integer) ────────────┐
 input ───▶ │ simulation · collision · Lua runtime · UI layout   │ ───▶ draw list, UI list, audio events
-           │ .ws64 loader · session/scene management · net code │
+           │ .wb64 loader · session/scene management · net code │
            └────────────────────────────────────────────────────┘
                                    ▲  ▼
            ┌──────────── platform layer (per port) ─────────────┐
@@ -70,7 +70,7 @@ input ───▶ │ simulation · collision · Lua runtime · UI layout   │
 
 ## 4. Simulation
 
-- **Fixed tick.** *Proposed:* 30 Hz on every platform, independent of display rate, PAL/NTSC or
+- **Fixed tick.** *Decided:* 30 Hz on every platform, independent of display rate, PAL/NTSC or
   slowdown. Rendering interpolates between ticks where a port can afford it.
 - **Integer maths.** *Decided* (carried over). Positions in thousandths of a unit, angles in tenths
   of a degree, sin/cos from integer tables. The DS has no FPU, and it keeps behaviour identical
@@ -94,7 +94,7 @@ The world is made of parts only. *Decided.* There is no terrain system.
 |---|---|
 | Shape | Block and wedge. *Proposed:* cylinder and sphere later, drawn round but colliding as boxes. |
 | Position, size | Integer thousandths. |
-| Rotation | **45° steps** on each axis. *Decided.* Animations use the same steps (§9.1). |
+| Rotation | **45° steps** on each axis. *Decided.* Animations turn smoothly between steps (§9.1). |
 | Colour, material | Material picks an engine texture (wood, brick, metal, …); colour tints it. |
 | Model | Optional: draw with a model asset instead of the shape. |
 | Collides | Whether players collide with it. |
@@ -130,14 +130,14 @@ prototype's fixed floor becomes an ordinary baseplate part.
 - **The engine owns memory.** Loading a scene loads only its assets; leaving it frees them when
   needed. Experiences never manage memory themselves.
 - **Budgets apply per scene** (§13), so a large experience is several scenes, not one big one.
-- When a script errors or exceeds its limits, *Proposed:* the session stops that experience and
-  returns the player to the hub with a message, rather than crashing.
+- When a script errors or exceeds its limits, the session stops that experience and returns the
+  player to the hub with a message, rather than crashing. *Decided.*
 
 ## 7. Scripting
 
 Lua controls the world. *Decided.*
 
-- **Lua 5.4**, *Proposed*, shipped as source in the `.ws64` and compiled on the console. Lua
+- **Lua 5.4**, *Proposed*, shipped as source in the `.wb64` and compiled on the console. Lua
   bytecode is never loaded from files: it isn't portable and the VM doesn't verify it.
   *Proposed:* consoles may cache compiled scripts locally, keyed by the source hash; the cache never
   travels between machines.
@@ -156,18 +156,22 @@ Lua controls the world. *Decided.*
 
 ## 8. Input
 
-*Proposed.* Experiences see one virtual controller:
+The engine reads each controller into one **virtual controller**; a **Lua input controller** in the
+experience decides what its buttons do. *Decided.*
 
-- **Move:** 8 directions, plus analog strength where the hardware has it.
-- **Camera:** orbit and zoom (engine-handled unless an experience takes over).
-- **Buttons:** Jump, Run and about 2 more action buttons. The Wii Remote held upright has the
-  fewest buttons, so it sets the count.
-- **Menu:** reserved for the engine (§11). *Decided.*
+- *Proposed* virtual controller: a move direction (8 directions, plus analog strength where the
+  hardware has it) and a fixed set of buttons named for the virtual controller, not the console
+  (e.g. `a`, `b`, `c`, `d`, `l`, `r`). Each port maps its controller to it once; the Wii Remote held
+  upright, with the fewest buttons, sets how many exist.
+- Experiences bind actions to those buttons in Lua (`input.bind("jump", "a")`, and read
+  `input.held("jump")`, `input.pressed("jump")`), so Jump and Run are just the default controller's
+  bindings, not engine features. Movement and camera have engine defaults an experience can
+  replace.
+- **Menu** is never available to experiences (§14.2).
+- Touch, the Wii Remote's pointer, motion and second screens are never exposed to experiences;
+  the engine may use them (UI focus, keyboard taps, bottom-screen help).
 
-Touch, the Wii Remote's pointer, motion and second screens are never exposed to experiences;
-the engine may use them (UI focus, keyboard taps, bottom-screen help).
-
-Each port maps its controller to this set once. Current mapping:
+Today's mapping, which becomes the default controller:
 
 | Platform | Move | Jump | Run | Orbit | Zoom | Menu |
 |---|---|---|---|---|---|---|
@@ -202,14 +206,16 @@ Rules for variants. *Proposed.*
 ### 9.1 Models
 
 - **Whole-part animation only.** *Decided.* A model may contain named sub-objects; animation moves,
-  rotates (in 45° steps, §5) or scales whole sub-objects, either from keyframe tracks stored in the
-  model or driven by Lua. No skeletons. On the network the host owns animation time; clients
-  render it.
+  rotates or scales whole sub-objects, either from keyframe tracks stored in the model or driven by
+  Lua. No skeletons. Keyframe rotations are 45° steps (§5), and animation is drawn **smoothly**
+  between them. *Decided.* On the network the host owns animation time; clients render it.
 - **Collision lives in the model file**, as namespaced objects. *Decided.* *Proposed* naming: objects
   called `collision` or `col_*` become collision shapes and are never drawn. Each must reduce to a
   box or wedge (the importer fits it, or rejects it with a clear error); up to about 8 per model.
   A model without collision objects collides as its part's box.
-- *Open:* whether collision sub-objects follow animation, or only the part as a whole moves.
+- **Collision shapes follow sub-object animation.** *Decided.* *Proposed:* position and scale follow
+  smoothly, while a shape's rotation snaps to the nearest 45° step, so collision stays as cheap
+  as for rotated parts.
 
 ### 9.2 Textures and lighting
 
@@ -235,7 +241,8 @@ effects are IMA-ADPCM in canonical form.
 
 ## 10. Networking
 
-Server-controlled networking, recorded as the plan for now. *Decided (as an idea).*
+**Deferred.** Networking is out of scope for now; this records the idea so other parts of the
+design don't rule it out.
 
 - **Hosts:** dedicated servers, or a PC hosting a session. The backend will be **open source**, so
   anyone can host their own experience services. *Decided.* Consoles are clients. Offline play runs
@@ -245,17 +252,17 @@ Server-controlled networking, recorded as the plan for now. *Decided (as an idea
 - **Joining** a running session means downloading the assets the current scene needs (§11), then a
   state snapshot.
 - **Chat** is filtered, rate-limited and logged on the host, never on consoles (§11.5).
-- *Open:* the N64's link speed and latency, which set snapshot rates and download sizes.
+- Later: the N64's link speed and latency, which set snapshot rates and download sizes.
 
 ## 11. Content and distribution
 
-### 11.1 The `.ws64` file
+### 11.1 The `.wb64` file
 
-*Decided:* one experience is one file, `<experience>.ws64`, holding everything for every platform.
+*Decided:* one experience is one file, `<experience>.wb64`, holding everything for every platform.
 
 ```
-experience.ws64
-  header   magic "WS64", format version, experience id + version, required API version, content hash
+experience.wb64
+  header   magic "WB64", format version, experience id + version, required API version, content hash
   index    [entry: kind, asset id, variant (canonical | n64 | gx | ds | 3ds), scene mask, offset, size, flags, hash]
   logic    manifest, scenes (part trees, settings), UI layouts, Lua source   — one copy, run on the host
   assets   canonical blobs + optional variant blobs
@@ -276,7 +283,7 @@ experience.ws64
 
 ### 11.2 Sources
 
-The loader doesn't care where a `.ws64` came from. *Decided.*
+The loader doesn't care where a `.wb64` came from. *Decided.*
 
 | Source | Use |
 |---|---|
@@ -296,14 +303,14 @@ The loader doesn't care where a `.ws64` came from. *Decided.*
 - **Background downloads.** *Decided:* may continue while playing if the budgets allow, at a reduced
   rate so gameplay keeps its bandwidth; full speed in the lobby or while loading.
 - **Caching.** *Decided:* the program caches experiences. A finished download is stored as an
-  ordinary `.ws64` (with only that platform's variants) and can be played offline.
+  ordinary `.wb64` (with only that platform's variants) and can be played offline.
   *Proposed:* least-recently-played eviction with a size cap per platform.
 - **N64:** *Decided:* no cache for now; revisit when N64 networking is in focus.
 
 ### 11.4 Saves
 
 *Proposed.* A small key-value store per experience through the Lua API, keyed by experience ID and
-stored next to it, never inside the `.ws64`, so updates can't wipe progress. Saves carry the
+stored next to it, never inside the `.wb64`, so updates can't wipe progress. Saves carry the
 experience version so an update can migrate them. Limits must fit the smallest storage: the N64
 Controller Pak holds 32 KB total, so about 1–2 KB per experience there.
 
@@ -318,10 +325,10 @@ receive only filtered messages, and only if they ask for chat access. Accounts a
 *Decided:* engine versioning is important.
 
 - **Engine version:** the program. Players in one session must run the same engine version.
-- **API version:** the Lua API. A `.ws64` declares the API version it needs; an older engine refuses
+- **API version:** the Lua API. A `.wb64` declares the API version it needs; an older engine refuses
   it with "update required" instead of half-loading. The API only adds; nothing is removed or
   changed in place.
-- **Format version:** the `.ws64` layout. Unknown index entry kinds are skipped, so new asset kinds
+- **Format version:** the `.wb64` layout. Unknown index entry kinds are skipped, so new asset kinds
   don't break older readers.
 - Updating the engine on N64 means a new ROM, so updates are rare: a stable API matters more
   than speed of change.
@@ -342,7 +349,7 @@ DS and N64 hardware before they're fixed:
 | Collision shapes per model | collision cost | ~8 |
 | Audio | DS channels, N64 software mixing | ~8 voices |
 | UI quads and glyphs | fill rate | to measure |
-| `.ws64` download per scene | N64 RAM and link speed | ~256 KB per platform |
+| `.wb64` download per scene | N64 RAM and link speed | ~256 KB per platform |
 | Save data | N64 Controller Pak | 1–2 KB per experience |
 
 The cost of the avatar matters: today's 412-triangle avatar × 4 players is about a third of the
@@ -351,7 +358,7 @@ triangle budget.
 **Strict mode on PC.** *Proposed:* the PC build can enforce every budget live (memory caps,
 instruction limits, triangle and texture counts, the 256×192 UI safe area) and report breaches
 as N64 or DS would hit them, so testing on PC in strict mode means it works everywhere. CI can run
-the same checks on every `.ws64`.
+the same checks on every `.wb64`.
 
 ## 14. UI and text
 
@@ -440,6 +447,7 @@ screen, and DS/3DS touch can tap its keys.
 | Physics (unanchored parts) | Deferred. Parts are anchored or scripted for now. |
 | Accounts | Deferred. Required for chat when they exist. |
 | Building experiences | Manual for now (hand-written data + tools). An in-engine build mode comes later. |
+| Networking | Deferred. The server-controlled idea (§10) is kept in mind, not designed. |
 | N64 caching and networking specifics | Deferred until N64 networking is in focus. |
 | Terrain (heightmaps, voxels) | Rejected: the world is parts only. |
 | Standalone export | Rejected: workbench64 isn't a general game engine. |
@@ -448,18 +456,12 @@ screen, and DS/3DS touch can tap its keys.
 
 ## Open questions
 
-1. **Rotation and collision:** 45° steps on every axis for collision, or yaw only with other axes
-   visual-only (§5)? Should animation interpolate smoothly between 45° steps visually, with
-   collision snapping to steps?
-2. **Animated collision:** do collision sub-objects follow sub-object animation (§9.1)?
-3. **Tick rate:** 30 Hz everywhere (§4)?
-4. **Action buttons:** Jump, Run and how many more (§8)?
-5. **N64 link:** bandwidth and latency, which set snapshot rates and download limits (§10, §11).
-6. **N64 Expansion Pak:** required or not? It doubles N64 RAM, but DS still limits budgets (§13).
-7. **File extension:** keep `.ws64` with the name workbench64, or change it (e.g. `.wb64`)?
-8. **Lua cost on N64 and DS:** measure compile time, memory and instructions per tick before
+1. **Rotation axes for collision:** 45° steps on every axis, or yaw only with other axes
+   visual-only (§5)? Several combined 45° turns make collision much more expensive.
+2. **Virtual controller size:** exactly which buttons the virtual controller has (§8).
+3. **N64 Expansion Pak:** required or not? It doubles N64 RAM, but DS still limits budgets (§13).
+4. **Lua cost on N64 and DS:** measure compile time, memory and instructions per tick before
    fixing the script budget (§7, §13).
-9. **Error handling:** stop the experience and return to the hub on script errors (§6)?
 
 ## Current prototype vs this spec
 
@@ -470,10 +472,10 @@ What hangout64 already has, and what changes:
 | Platforms, CI | All six build in Docker/CI, releases on tags | Keep |
 | Maths | Integer core, `isin`/`icos` | Keep |
 | World | Fixed 20×20 floor + up to 256 unrotated box parts | Parts only, baseplate as a part, wedges, 45° rotation, scene settings |
-| Content | `HG64` place file (TEXR/MESH/PART chunks), built-in place | `.ws64` with logic + canonical/variant assets, scenes, versions |
+| Content | `HG64` place file (TEXR/MESH/PART chunks), built-in place | `.wb64` with logic + canonical/variant assets, scenes, versions |
 | Assets | OBJ models, 16-colour PNG textures converted on load | Canonical forms + tool-made variants; collision in models |
 | Rendering | Each `main.c` draws the level itself | Core draw list; ports render it their own way |
-| Timing | One update per vsync on consoles, fixed 60 Hz on PC | Fixed tick everywhere |
+| Timing | One update per vsync on consoles, fixed 60 Hz on PC | Fixed 30 Hz tick everywhere |
 | Avatar | 412-triangle guy, tinted coat, run hop | Count it against the budget; customisation as data |
 | Scripting, UI, audio, networking, saves | None | §7, §14, §9.4, §10, §11.4 |
 
@@ -482,8 +484,8 @@ Suggested order of work:
 1. Fixed tick everywhere, and a headless core with replay and state-hash tests.
 2. Lua on N64 and DS: measure cost; settle the script budget and number types.
 3. The draw list and platform layer, starting with PC, then N64.
-4. `.ws64` with sessions and scenes, replacing the place file.
+4. `.wb64` with sessions and scenes, replacing the place file.
 5. Parts: baseplate, wedges, 45° rotation and collision.
 6. UI, the fixed font and the keyboard.
 7. Audio.
-8. Networking and the open-source host.
+8. Networking and the open-source host, when it's back in scope.

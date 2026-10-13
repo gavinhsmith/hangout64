@@ -94,7 +94,7 @@ The world is made of parts only. *Decided.* There is no terrain system.
 |---|---|
 | Shape | Block and wedge. *Proposed:* cylinder and sphere later, drawn round but colliding as boxes. |
 | Position, size | Integer thousandths. |
-| Rotation | **45° steps** on each axis. *Decided.* Animations turn smoothly between steps (§9.1). |
+| Rotation | **45° steps about the vertical axis only.** *Decided.* Animations turn smoothly between steps (§9.1). |
 | Colour, material | Material picks an engine texture (wood, brick, metal, …); colour tints it. |
 | Model | Optional: draw with a model asset instead of the shape. |
 | Collides | Whether players collide with it. |
@@ -106,11 +106,10 @@ The world is made of parts only. *Decided.* There is no terrain system.
 - Players are boxes; parts collide as boxes and wedges, or as a model's collision shapes (§9.1).
 - Moving one axis at a time, stepping up small ledges and stopping flush with walls carry over
   from the prototype.
-- **45° rotation** means a rotated box is no longer axis-aligned. A box turned 45° about one axis
-  is axis-aligned in a frame turned 45°, so collision needs a separating-axis test with a few
-  extra axes and a 1/√2 constant: still integer, still cheap. Combined rotations on several axes
-  are the expensive case. *Open:* allow 45° on every axis for collision, or only yaw, with other
-  axes visual-only.
+- **45° rotation** about the vertical axis means a turned box is no longer axis-aligned, but it
+  is axis-aligned in a frame turned 45°. Collision adds a separating-axis test with two extra
+  axes and a 1/√2 constant: still integer, still cheap. Turns on other axes are not supported,
+  which keeps it that way. *Decided.*
 - **Broadphase.** *Proposed:* a coarse grid per scene, so collision checks nearby parts only.
 
 ### Scene settings
@@ -159,14 +158,25 @@ Lua controls the world. *Decided.*
 The engine reads each controller into one **virtual controller**; a **Lua input controller** in the
 experience decides what its buttons do. *Decided.*
 
-- *Proposed* virtual controller: a move direction (8 directions, plus analog strength where the
-  hardware has it) and a fixed set of buttons named for the virtual controller, not the console
-  (e.g. `a`, `b`, `c`, `d`, `l`, `r`). Each port maps its controller to it once; the Wii Remote held
-  upright, with the fewest buttons, sets how many exist.
+- The virtual controller has a move direction (8 directions, plus analog strength where the
+  hardware has it) and six buttons, `a`, `b`, `c`, `d`, `l`, `r`, named for the virtual controller,
+  not the console. *Decided.* Each port maps its controller to them once.
 - Experiences bind actions to those buttons in Lua (`input.bind("jump", "a")`, and read
   `input.held("jump")`, `input.pressed("jump")`), so Jump and Run are just the default controller's
   bindings, not engine features. Movement and camera have engine defaults an experience can
   replace.
+- **Combinations** register as their own input. *Decided.* *Proposed* rules:
+
+```lua
+input.bind("dash", {"l", "a"})   -- l + a together is "dash"
+input.bind("jump", "a")
+```
+
+  - Buttons pressed within a short window (about 2 ticks) count as pressed together.
+  - The most specific binding wins: while `l` + `a` is held, `dash` fires and `jump` doesn't.
+  - Releasing any button of a combination ends it.
+  - A combination can include a direction (`{"l", "up"}`), which helps the Wii Remote's small
+    button count.
 - **Menu** is never available to experiences (§14.2).
 - Touch, the Wii Remote's pointer, motion and second screens are never exposed to experiences;
   the engine may use them (UI focus, keyboard taps, bottom-screen help).
@@ -208,7 +218,8 @@ Rules for variants. *Proposed.*
 - **Whole-part animation only.** *Decided.* A model may contain named sub-objects; animation moves,
   rotates or scales whole sub-objects, either from keyframe tracks stored in the model or driven by
   Lua. No skeletons. Keyframe rotations are 45° steps (§5), and animation is drawn **smoothly**
-  between them. *Decided.* On the network the host owns animation time; clients render it.
+  between them. *Decided.* *Proposed:* sub-objects without collision may rotate about any axis,
+  since that only affects drawing; anything with collision turns about the vertical axis only. On the network the host owns animation time; clients render it.
 - **Collision lives in the model file**, as namespaced objects. *Decided.* *Proposed* naming: objects
   called `collision` or `col_*` become collision shapes and are never drawn. Each must reduce to a
   box or wedge (the importer fits it, or rejects it with a clear error); up to about 8 per model.
@@ -343,7 +354,7 @@ DS and N64 hardware before they're fixed:
 | Triangles on screen | DS hardware limit (2048/frame), N64 fill rate | ~1500, avatars included |
 | Texture size | N64 texture memory (4 KB) | ≤ 64×64, 32×32 typical |
 | Texture memory | DS texture VRAM | ~128 KB canonical |
-| RAM for the experience | DS 4 MB, N64 4 MB, minus engine and Lua | ~1 MB, enforced by the Lua memory cap |
+| RAM for the experience | DS 4 MB, N64 4 MB (no Expansion Pak required), minus engine and Lua | ~1 MB, enforced by the Lua memory cap |
 | Script work | DS CPU | N instructions per tick, calibrated on DS |
 | Parts | collision and draw cost | 256 (prototype value) |
 | Collision shapes per model | collision cost | ~8 |
@@ -456,12 +467,12 @@ screen, and DS/3DS touch can tap its keys.
 
 ## Open questions
 
-1. **Rotation axes for collision:** 45° steps on every axis, or yaw only with other axes
-   visual-only (§5)? Several combined 45° turns make collision much more expensive.
-2. **Virtual controller size:** exactly which buttons the virtual controller has (§8).
-3. **N64 Expansion Pak:** required or not? It doubles N64 RAM, but DS still limits budgets (§13).
-4. **Lua cost on N64 and DS:** measure compile time, memory and instructions per tick before
-   fixing the script budget (§7, §13).
+1. **Lua cost on N64 and DS:** measure compile time, memory and instructions per tick before
+   fixing the script budget and number types (§7, §13).
+
+Settled since the first draft: `.wb64`; 30 Hz tick; smooth animation with collision that follows
+it; rotation about the vertical axis only; the six-button virtual controller with combinations;
+script errors return to the hub; no Expansion Pak (N64 budgets assume 4 MB); networking deferred.
 
 ## Current prototype vs this spec
 

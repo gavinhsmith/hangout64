@@ -116,6 +116,13 @@ static vertex *build_vbo(void)
     return vbo;
 }
 
+/* Microseconds since boot, from the ARM11 tick counter (split to avoid overflow). */
+static uint64_t now_us(void)
+{
+    uint64_t t = svcGetSystemTick();
+    return t / SYSCLOCK_ARM11 * 1000000 + t % SYSCLOCK_ARM11 * 1000000 / SYSCLOCK_ARM11;
+}
+
 /* Circle pad moves, A jumps, B runs, D-pad orbits, L/R zoom in/out. */
 static unsigned read_input(u32 keys)
 {
@@ -178,14 +185,17 @@ int main(void)
     Mtx_PerspTilt(&proj, C3D_AngleFromDegrees(53.0f), 4.0f / 3.0f, 0.2f, 100.0f, false);
     Mtx_Identity(&identity);
 
+    ticker tk = {0};
     while (aptMainLoop()) {
         hidScanInput();
         if (hidKeysDown() & KEY_START)
             break;
         unsigned b = read_input(hidKeysHeld());
-        input in[MAX_PLAYERS] = {{b, cam.now.yaw}};
-        w = world_update(w, in);
-        cam = camera_update(cam, b, &w.players[0]);
+        for (int n = ticker_due(&tk, now_us()); n > 0; n--) {
+            input in[MAX_PLAYERS] = {{b, cam.now.yaw}};
+            w = world_update(w, in);
+            cam = camera_update(cam, b, &w.players[0]);
+        }
 
         /* view = translate(0, 0, -dist) rotX(pitch) rotY(-yaw) translate(-x, -y, -z) */
         const view *v = &cam.now;

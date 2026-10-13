@@ -1,4 +1,5 @@
 #include <gccore.h>
+#include <ogc/lwp_watchdog.h>
 #include <malloc.h>
 #include <stdlib.h>
 #include <string.h>
@@ -316,6 +317,7 @@ int main(void)
     world w = world_init(&pl, 1);
     upload_textures();
     camera cam = camera_init();
+    ticker tk = {0};
     while (!quit) {
         draw_scene(&w, &cam.now);
         draw_upscaled();
@@ -329,9 +331,11 @@ int main(void)
         VIDEO_Flush();
         VIDEO_WaitVSync();
         unsigned b = read_input(&quit);
-        input in[MAX_PLAYERS] = {{b, cam.now.yaw}};
-        w = world_update(w, in);
-        cam = camera_update(cam, b, &w.players[0]);
+        for (int n = ticker_due(&tk, ticks_to_microsecs(gettime())); n > 0; n--) {
+            input in[MAX_PLAYERS] = {{b, cam.now.yaw}};
+            w = world_update(w, in);
+            cam = camera_update(cam, b, &w.players[0]);
+        }
     }
 #ifdef HW_RVL
     if (power_pressed)

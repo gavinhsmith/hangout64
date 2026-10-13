@@ -7,18 +7,18 @@
 
 static place pl;
 
-/* Run `frames` frames with player 0 holding `buttons`, looking along `yaw`. */
-static world run(world w, unsigned buttons, int yaw, int frames)
+/* Run `ticks` ticks with player 0 holding `buttons`, looking along `yaw`. */
+static world run(world w, unsigned buttons, int yaw, int ticks)
 {
     input in[MAX_PLAYERS] = {{buttons, yaw}};
-    while (frames--)
+    while (ticks--)
         w = world_update(w, in);
     return w;
 }
 
-static camera follow(camera c, unsigned buttons, const player *p, int frames)
+static camera follow(camera c, unsigned buttons, const player *p, int ticks)
 {
-    while (frames--)
+    while (ticks--)
         c = camera_update(c, buttons, p);
     return c;
 }
@@ -149,16 +149,16 @@ int main(void)
 
     /* Movement is relative to the viewer's camera yaw: at 0, forward is -Z, right is +X. */
     world f = run(w, MOVE_FWD, 0, 10);
-    assert(f.players[0].z == -600 && f.players[0].x == 0);
+    assert(f.players[0].z == -1200 && f.players[0].x == 0);
     world r = run(w, MOVE_RIGHT, 0, 10);
-    assert(r.players[0].x == 600 && r.players[0].z == 0);
+    assert(r.players[0].x == 1200 && r.players[0].z == 0);
     world side = run(w, MOVE_FWD, 900, 10); /* camera orbited to the +X side */
-    assert(side.players[0].x == -600 && abs(side.players[0].z) <= 10);
+    assert(side.players[0].x == -1200 && abs(side.players[0].z) <= 10);
 
     /* Diagonals move at the same speed (within rounding), not sqrt(2) faster. */
     world d = run(w, MOVE_FWD | MOVE_RIGHT, 0, 10);
     int dist2 = d.players[0].x * d.players[0].x + d.players[0].z * d.players[0].z;
-    assert(d.players[0].x > 0 && d.players[0].z < 0 && dist2 > 580 * 580 && dist2 <= 600 * 600);
+    assert(d.players[0].x > 0 && d.players[0].z < 0 && dist2 > 1160 * 1160 && dist2 <= 1200 * 1200);
 
     /* Jump: up about 1.2 units, back down, no jumping again mid-air. */
     world j = run(w, JUMP, 0, 1);
@@ -181,10 +181,10 @@ int main(void)
     assert(step.players[0].z == -3000 + PLAYER_RADIUS && step.players[0].y == 0);
 
     /* The curb (z 3.5..4.5, 0.3 high) is low enough to walk up and off again. */
-    world curb = run(w, MOVE_BACK, 0, 65); /* z = 3.9: on top of it */
+    world curb = run(w, MOVE_BACK, 0, 32); /* z = 3.84: on top of it */
     assert(curb.players[0].y == 300 && curb.players[0].on_ground);
-    curb = run(curb, MOVE_BACK, 0, 40);   /* z = 6.3: walked off the far side */
-    assert(curb.players[0].y == 0 && curb.players[0].z == 6300);
+    curb = run(curb, MOVE_BACK, 0, 20);   /* z = 6.24: walked off the far side */
+    assert(curb.players[0].y == 0 && curb.players[0].z == 6240);
     world high = w; /* only walks up when grounded */
     high.players[0].z = 3100; /* front edge 3.45: one step reaches into the curb */
     high.players[0].y = 150;
@@ -192,15 +192,15 @@ int main(void)
     high.players[0].vy = 50;
     high = run(high, MOVE_BACK, 0, 1);
     assert(high.players[0].z == 3500 - PLAYER_RADIUS);
-    world up = run(step, MOVE_FWD | JUMP, 0, 25);
-    up = run(up, 0, 0, 60);
+    world up = run(step, MOVE_FWD | JUMP, 0, 13);
+    up = run(up, 0, 0, 30);
     assert(up.players[0].on_ground && up.players[0].y == 600);
     world drop = w;
     drop.players[0].z = -4000;
     drop.players[0].y = 3000;
     drop = run(drop, 0, 0, 100);
     assert(drop.players[0].y == 600 && drop.players[0].on_ground);
-    for (int i = 0; i < 4; i++) { /* standing on a part: grounded every frame, not every other */
+    for (int i = 0; i < 4; i++) { /* standing on a part: grounded every tick, not every other */
         drop = run(drop, 0, 0, 1);
         assert(drop.players[0].on_ground && drop.players[0].y == 600);
     }
@@ -210,8 +210,8 @@ int main(void)
     input in[MAX_PLAYERS] = {{MOVE_RIGHT, 0}, {MOVE_FWD, 0}};
     for (int i = 0; i < 10; i++)
         two = world_update(two, in);
-    assert(two.players[0].x == 600 && two.players[0].z == 0);
-    assert(two.players[1].x == 1500 && two.players[1].z == -600);
+    assert(two.players[0].x == 1200 && two.players[0].z == 0);
+    assert(two.players[1].x == 1500 && two.players[1].z == -1200);
 
     /* Players turn (the short way) to face where they move, and keep facing it. */
     assert(run(w, MOVE_RIGHT, 0, 100).players[0].heading == 2700);
@@ -230,7 +230,7 @@ int main(void)
     c = follow(c, 0, &f.players[0], 200);
     assert(c.now.z == f.players[0].z && c.now.x == f.players[0].x);
     camera o = follow(camera_init(), CAM_RIGHT, p0, 1);
-    assert(o.target.yaw == 20 && o.now.yaw > 0 && o.now.yaw < 20);
+    assert(o.target.yaw == 40 && o.now.yaw > 0 && o.now.yaw < 40);
     o = follow(o, CAM_UP | CAM_IN, p0, 300);
     assert(o.now.pitch == CAM_PITCH_MAX && o.now.dist == CAM_DIST_MIN);
 
@@ -239,9 +239,22 @@ int main(void)
     world walked = run(w, MOVE_RIGHT, 0, 30), ran = run(w, MOVE_RIGHT | RUN, 0, 30);
     assert(ran.players[0].x - p0->x > (walked.players[0].x - p0->x) * 3 / 2);
     assert(player_bob(&walked.players[0]) == 0);
-    world mid = run(w, MOVE_RIGHT | RUN, 0, 10), land = run(w, MOVE_RIGHT | RUN, 0, 20);
+    world mid = run(w, MOVE_RIGHT | RUN, 0, 5), land = run(w, MOVE_RIGHT | RUN, 0, 10);
     assert(player_bob(&mid.players[0]) == 150 && player_bob(&land.players[0]) == 0);
     assert(player_bob(&run(ran, RUN, 0, 1).players[0]) == 0); /* stopped */
+
+    /* The ticker runs exactly TICK_HZ ticks a second whatever the polling rate, and drops
+     * time after a stall instead of fast-forwarding through it. */
+    ticker tk = {0};
+    int ticks = 0;
+    for (uint64_t us = 5000000; us < 7000000; us += 16667) /* 2 s polled at 60 Hz */
+        ticks += ticker_due(&tk, us);
+    assert(ticks >= 2 * TICK_HZ && ticks <= 2 * TICK_HZ + 1);
+    ticks = 0;
+    for (uint64_t us = 7000000; us < 9000000; us += 6944) /* 2 s polled at 144 Hz */
+        ticks += ticker_due(&tk, us);
+    assert(ticks >= 2 * TICK_HZ - 1 && ticks <= 2 * TICK_HZ + 1);
+    assert(ticker_due(&tk, 60000000) == 4 && ticker_due(&tk, 60000000) == 0); /* a 51 s stall */
 
     /* Walking one way: nothing for a moment, then the camera slowly swings behind,
      * until it's there. Walking toward it never turns it. */
@@ -251,9 +264,9 @@ int main(void)
         input in[MAX_PLAYERS] = {{MOVE_RIGHT, s.now.yaw}};
         walk = world_update(walk, in);
         s = camera_update(s, 0, &walk.players[0]);
-        if (i == 40)
+        if (i == 20)
             assert(s.target.yaw == 0);
-        if (i == 60)
+        if (i == 30)
             assert(s.target.yaw < 0 && s.target.yaw > -150);
     }
     assert(s.target.yaw < -450); /* strafing right circles, with the camera behind */

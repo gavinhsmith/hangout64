@@ -117,6 +117,7 @@ int main(void)
     world w = world_init(&pl, 1);
     upload_textures();
     camera cam = camera_init();
+    ticker tk = {0};
     GLuint level_list = compile_mesh(&level_mesh), guy_list = compile_mesh(&avatar_meshes[0]); /* geometry only: the texture is bound per player */
     GLuint mesh_lists[PLACE_MAX_MESHES];
     for (int i = 0; i < pl.mesh_count; i++)
@@ -162,8 +163,10 @@ int main(void)
         gl_context_end();
         rdpq_detach_show();
         unsigned b = read_input();
-        input in[MAX_PLAYERS] = {{b, cam.now.yaw}};
-        w = world_update(w, in);
-        cam = camera_update(cam, b, &w.players[0]);
+        for (int n = ticker_due(&tk, get_ticks_us()); n > 0; n--) {
+            input in[MAX_PLAYERS] = {{b, cam.now.yaw}};
+            w = world_update(w, in);
+            cam = camera_update(cam, b, &w.players[0]);
+        }
     }
 }

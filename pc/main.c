@@ -8,7 +8,6 @@
 /* Power-of-two texture holding the 320x240 frame, so plain GL 1.1 works everywhere. */
 #define TEX_W 512
 #define TEX_H 256
-#define TICK_MS (1000.0 / 60.0)
 
 static place pl; /* the loaded place; mesh parts are drawn from it */
 static GLuint gpu_textures[MAX_PLAYERS + PLACE_MAX_TEXTURES]; /* by texture slot */
@@ -189,7 +188,7 @@ int main(int argc, char **argv)
     world w = world_init(&pl, 1);
     upload_textures();
     camera cam = camera_init();
-    double next = (double)SDL_GetTicks();
+    ticker tk = {0};
     for (;;) {
         SDL_Event e;
         while (SDL_PollEvent(&e)) {
@@ -199,13 +198,11 @@ int main(int argc, char **argv)
             if (e.type == SDL_EVENT_KEY_DOWN && e.key.key == SDLK_F11 && !e.key.repeat)
                 SDL_SetWindowFullscreen(win, !(SDL_GetWindowFlags(win) & SDL_WINDOW_FULLSCREEN));
         }
-        /* Fixed 60 Hz update regardless of monitor refresh rate. */
-        while ((double)SDL_GetTicks() >= next) {
-            unsigned b = read_input();
+        unsigned b = read_input();
+        for (int n = ticker_due(&tk, SDL_GetTicksNS() / 1000); n > 0; n--) {
             input in[MAX_PLAYERS] = {{b, cam.now.yaw}};
             w = world_update(w, in);
             cam = camera_update(cam, b, &w.players[0]);
-            next += TICK_MS;
         }
         draw_scene(&w, &cam.now);
         present(win, tex);

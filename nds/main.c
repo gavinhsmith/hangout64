@@ -33,6 +33,18 @@ static void upload_textures(void)
     glBindTexture(0, 0);
 }
 
+/* Microseconds since cpuStartTiming(). Its bus-clock count is 32 bits and wraps every two
+ * minutes, so it's accumulated into 64 bits; called every frame, it never misses a wrap. */
+static uint64_t now_us(void)
+{
+    static uint64_t total;
+    static u32 last;
+    u32 t = cpuGetTiming();
+    total += t - last;
+    last = t;
+    return total / BUS_CLOCK * 1000000 + total % BUS_CLOCK * 1000000 / BUS_CLOCK;
+}
+
 /* D-pad moves, A jumps, B runs, R + D-pad orbits, X/Y zoom in/out. */
 static unsigned read_input(u32 keys)
 {
@@ -111,6 +123,8 @@ int main(void)
     glEnable(GL_TEXTURE_2D);
     upload_textures();
     camera cam = camera_init();
+    ticker tk = {0};
+    cpuStartTiming(0);
     for (;;) {
         scanKeys();
         if (keysDown() & KEY_START)
@@ -148,9 +162,11 @@ int main(void)
         glFlush(0);
         swiWaitForVBlank();
         unsigned b = read_input(keysHeld());
-        input in[MAX_PLAYERS] = {{b, cam.now.yaw}};
-        w = world_update(w, in);
-        cam = camera_update(cam, b, &w.players[0]);
+        for (int n = ticker_due(&tk, now_us()); n > 0; n--) {
+            input in[MAX_PLAYERS] = {{b, cam.now.yaw}};
+            w = world_update(w, in);
+            cam = camera_update(cam, b, &w.players[0]);
+        }
     }
     return 0;
 }

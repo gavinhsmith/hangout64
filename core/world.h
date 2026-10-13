@@ -89,14 +89,14 @@ void place_free(place *pl);
 extern const uint8_t default_place[];
 extern const unsigned default_place_size;
 
-/* Held buttons for one frame. Movement is relative to the camera's view. */
+/* Held buttons for one tick. Movement is relative to the camera's view. */
 enum {
     MOVE_LEFT = 1 << 0, MOVE_RIGHT = 1 << 1, MOVE_FWD = 1 << 2, MOVE_BACK = 1 << 3,
     CAM_LEFT = 1 << 4, CAM_RIGHT = 1 << 5, CAM_UP = 1 << 6, CAM_DOWN = 1 << 7,
     CAM_IN = 1 << 8, CAM_OUT = 1 << 9, JUMP = 1 << 10, RUN = 1 << 11,
 };
 
-/* One player's input for a frame: buttons plus the yaw of the camera they're looking
+/* One player's input for a tick: buttons plus the yaw of the camera they're looking
  * through, so "forward" means into their screen. */
 typedef struct {
     unsigned buttons;
@@ -108,11 +108,11 @@ typedef struct {
 
 typedef struct {
     int x, y, z;   /* feet */
-    int vy;        /* vertical speed per frame */
+    int vy;        /* vertical speed per tick */
     int on_ground;
     int heading;   /* 0..3599; 0 faces -Z, turns toward where it moves */
     int target_heading;
-    int stride;    /* frames into the running cycle while running on the ground, else 0 */
+    int stride;    /* ticks into the running cycle while running on the ground, else 0 */
     uint8_t coat[3];
 } player;
 
@@ -140,7 +140,17 @@ void avatar_build(int i, const uint8_t coat[3]);
  * step. Only for drawing; collision uses y. */
 int player_bob(const player *p);
 
-/* Advance one frame; inputs[i] drives players[i]. */
+/* The game advances in fixed ticks, the same rate on every platform whatever the display
+ * does. Each port asks a ticker how many ticks are due by its microsecond clock (any origin,
+ * must not wrap) and runs that many world_update()s and camera_update()s. */
+#define TICK_HZ 30
+typedef struct {
+    uint64_t next; /* when the next tick is due, in 1/TICK_HZ microseconds */
+    int started;
+} ticker;
+int ticker_due(ticker *t, uint64_t now_us);
+
+/* Advance one tick; inputs[i] drives players[i]. */
 world world_update(world w, const input inputs[MAX_PLAYERS]);
 
 /* A camera is per viewer, not game state. It follows one player and eases toward
@@ -159,7 +169,7 @@ typedef struct {
 typedef struct {
     view now, target;
     int ground; /* height of the last thing the followed player stood on */
-    int last_x, last_z, last_heading, walked; /* frames they've walked one way */
+    int last_x, last_z, last_heading, walked; /* ticks they've walked one way */
 } camera;
 
 #define CAM_PITCH_MAX 800

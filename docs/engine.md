@@ -534,14 +534,14 @@ What hangout64 already has, and what changes:
 | Content | `HG64` place file (TEXR/MESH/PART chunks), built-in place | `.wb64` with logic + canonical/variant assets, scenes, versions |
 | Assets | OBJ models, 16-colour PNG textures converted on load | Canonical forms + tool-made variants; collision in models |
 | Rendering | Each `main.c` draws the level itself | Core draw list; ports render it their own way |
-| Timing | One update per vsync on consoles, fixed 60 Hz on PC | Fixed 30 Hz tick everywhere |
+| Timing | Fixed 30 Hz tick on every platform (`ticker_due` in the core); drawn at display rate without interpolation | Keep; interpolate where a port can afford it |
 | Avatar | 412-triangle guy, tinted coat, run hop | Count it against the budget; customisation as data |
 | Scripting | Lua 5.4.9 as a submodule in `third_party/lua`, measured by `bench/lua`; not in the game yet | §7 |
 | UI, audio, networking, saves | None | §14, §9.4, §10, §11.4 |
 
 Suggested order of work:
 
-1. Fixed tick everywhere, and a headless core with replay and state-hash tests.
+1. ~~Fixed tick everywhere~~ (done), and a headless core with replay and state-hash tests.
 2. ~~Lua on N64 and DS: measure cost; settle the script budget and number types.~~ Done (§16).
 3. The draw list and platform layer, starting with PC, then N64.
 4. `.wb64` with sessions and scenes, replacing the place file.

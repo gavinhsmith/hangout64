@@ -8,20 +8,22 @@ static int16_t level_verts[PLACE_MAX_TRIS * 3][3]; /* place_load() keeps us with
 static uint8_t level_colors[PLACE_MAX_TRIS][3];
 mesh level_mesh = {.verts = level_verts, .colors = level_colors};
 
-#define MOVE_SPEED 60 /* thousandths of a unit per frame */
-#define RUN_SPEED 110
-#define RUN_STEP 20   /* frames per running step: one hop each */
+/* Rates are per tick (TICK_HZ, 30 a second). */
+#define MOVE_SPEED 120 /* thousandths of a unit per tick: 3.6 units a second */
+#define RUN_SPEED 220
+#define RUN_STEP 10   /* ticks per running step: one hop each */
 #define RUN_BOB 150   /* height of a hop */
 #define DIAGONAL 2896 /* 1/sqrt(2), scaled by 4096 */
-#define ORBIT_SPEED 20
-#define ZOOM_SPEED 100
-#define JUMP_SPEED 98 /* peaks about 1.15 units up after ~0.4 s */
-#define GRAVITY 4
+#define ORBIT_SPEED 40
+#define ZOOM_SPEED 200
+#define JUMP_SPEED 200 /* peaks about 1.15 units up after 0.4 s */
+#define GRAVITY 16
 #define STEP_HEIGHT 400 /* ledges up to this high are walked up, not jumped */
-#define EASE 8      /* the camera closes 1/EASE of the gap each frame */
-#define TURN_EASE 4 /* players turn faster than the camera follows */
-#define BEHIND_DELAY 45 /* frames of walking one way before the camera swings behind */
-#define BEHIND_SPEED 5  /* tenths of a degree per frame: 30 degrees a second */
+#define EASE 4      /* the camera closes 1/EASE of the gap each tick */
+#define TURN_EASE 2 /* players turn faster than the camera follows */
+#define BEHIND_DELAY 22 /* ticks of walking one way before the camera swings behind */
+#define BEHIND_SPEED 10 /* tenths of a degree per tick: 30 degrees a second */
+#define TICK_CATCHUP 4  /* most ticks run at once to catch up; time beyond that is dropped */
 
 /* Append a quad (corners in order) as two triangles. Coordinates in thousandths. */
 static int add_quad(int t, const int c[4][3], const uint8_t color[3], int shade)
@@ -210,7 +212,7 @@ static player update_player(player p, input in)
     /* Jump from the floor or a part; gravity brings you back. */
     if ((in.buttons & JUMP) && p.on_ground)
         p.vy = JUMP_SPEED;
-    /* Gravity first, so standing still still pushes into the ground each frame and
+    /* Gravity first, so standing still still pushes into the ground each tick and
      * on_ground stays set. */
     p.vy -= GRAVITY;
     int dy = p.vy;
@@ -257,6 +259,24 @@ int player_bob(const player *p)
     return abs(isin(p->stride * 180 / RUN_STEP)) * RUN_BOB / 4096;
 }
 
+int ticker_due(ticker *t, uint64_t now_us)
+{
+    /* Time is kept in units of 1/TICK_HZ microseconds, so ticks stay exact over time. */
+    uint64_t now = now_us * TICK_HZ;
+    if (!t->started) {
+        t->started = 1;
+        t->next = now;
+    }
+    int due = 0;
+    while (now >= t->next && due < TICK_CATCHUP) {
+        t->next += 1000000;
+        due++;
+    }
+    if (now >= t->next) /* still behind after a stall (or a pause): drop the rest */
+        t->next = now + 1000000;
+    return due;
+}
+
 world world_update(world w, const input inputs[MAX_PLAYERS])
 {
     for (int i = 0; i < w.player_count; i++)
@@ -287,7 +307,7 @@ camera camera_update(camera c, unsigned buttons, const player *follow)
     if (buttons & CAM_OUT)   c.target.dist += ZOOM_SPEED;
     c.target.pitch = clamp(c.target.pitch, CAM_PITCH_MIN, CAM_PITCH_MAX);
 
-    /* Walking one way (moving, and facing within a few degrees of last frame, which
+    /* Walking one way (moving, and facing within a few degrees of last tick, which
      * allows for the camera's own turning) for a while swings the camera behind them,
      * unless they're walking toward it or you're orbiting. */
     int moved = follow->x != c.last_x || follow->z != c.last_z;

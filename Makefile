@@ -30,7 +30,13 @@ clean:
 	rm -rf build core/test_core
 	$(foreach c,$(CONSOLES),docker run --rm $(DOCKER_ARGS_$(c)) -v "$(CURDIR):/src" -w /src/$(c) $(IMAGE_$(c)) make clean;)
 
+# Lua benchmark ROMs (bench/lua): measure Lua's cost on the slowest consoles.
+bench-n64:
+	docker run --rm $(DOCKER_ARGS_n64) -v "$(CURDIR):/src" -w /src/bench/lua $(IMAGE_n64) make -f Makefile.n64
+bench-nds:
+	docker run --rm -v "$(CURDIR):/src" -w /src/bench/lua $(IMAGE_nds) make -f Makefile.nds
+
 n64-reset:
 	docker volume rm $(N64_VOLUME)
 
-.PHONY: all test pc clean n64-reset $(CONSOLES)
+.PHONY: all test pc clean n64-reset bench-n64 bench-nds $(CONSOLES)

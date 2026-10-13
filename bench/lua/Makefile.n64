@@ -1,0 +1,41 @@
+# Lua benchmark ROMs for N64: luabench64.z64 (Lua's default 64-bit int/double) and
+# luabench32.z64 (LUA_32BITS: 32-bit int/float).
+BUILD_DIR = build/n64
+include $(N64_INST)/include/n64.mk
+
+LUA := ../../third_party/lua
+PYTHON ?= python3
+LUA_SRC := $(filter-out lua.c luac.c,$(notdir $(wildcard $(LUA)/*.c)))
+CFLAGS += -I$(LUA) -I.
+OBJS = $(addprefix $(BUILD_DIR)/$(1)/,bench.o main_n64.o $(LUA_SRC:.c=.o))
+
+all: luabench64.z64 luabench32.z64
+
+bench_lua.h: bench.lua embed.py
+	$(PYTHON) embed.py bench.lua bench_lua > $@
+
+# Lua isn't ours to keep warning-free.
+$(BUILD_DIR)/64/%.o: $(LUA)/%.c
+	@mkdir -p $(dir $@)
+	$(N64_CC) -c $(filter-out -Werror,$(CFLAGS)) -o $@ $<
+$(BUILD_DIR)/32/%.o: $(LUA)/%.c
+	@mkdir -p $(dir $@)
+	$(N64_CC) -c $(filter-out -Werror,$(CFLAGS)) -DLUA_32BITS=1 -o $@ $<
+$(BUILD_DIR)/64/%.o: %.c bench_lua.h
+	@mkdir -p $(dir $@)
+	$(N64_CC) -c $(CFLAGS) -o $@ $<
+$(BUILD_DIR)/32/%.o: %.c bench_lua.h
+	@mkdir -p $(dir $@)
+	$(N64_CC) -c $(CFLAGS) -DLUA_32BITS=1 -o $@ $<
+
+$(BUILD_DIR)/luabench64.elf: $(call OBJS,64)
+$(BUILD_DIR)/luabench32.elf: $(call OBJS,32)
+luabench64.z64: N64_ROM_TITLE = "luabench64"
+luabench32.z64: N64_ROM_TITLE = "luabench32"
+
+$(N64_INST)/include/n64.mk:
+	rm -rf /tmp/libdragon
+	git clone --depth 1 --branch preview https://github.com/DragonMinded/libdragon /tmp/libdragon
+	$(MAKE) -C /tmp/libdragon -j$$(nproc) install tools-install
+
+.PHONY: all

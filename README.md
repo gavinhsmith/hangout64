@@ -47,6 +47,8 @@ make nds
 make 3ds
 make        # everything
 make n64-reset  # drop the cached N64 toolchain + libdragon volume (e.g. after an image update)
+make bench-n64  # Lua benchmark ROMs (bench/lua), see docs/engine.md §16
+make bench-nds
 ```
 
 ## Running

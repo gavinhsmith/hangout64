@@ -136,10 +136,12 @@ prototype's fixed floor becomes an ordinary baseplate part.
 
 Lua controls the world. *Decided.*
 
-- **Lua 5.4**, *Proposed*, shipped as source in the `.wb64` and compiled on the console. Lua
-  bytecode is never loaded from files: it isn't portable and the VM doesn't verify it.
-  *Proposed:* consoles may cache compiled scripts locally, keyed by the source hash; the cache never
-  travels between machines.
+- **Lua 5.4**, built with `LUA_32BITS` (32-bit integers and floats). *Proposed, measured (§16):*
+  it fits easily in memory and is 10–20% faster on N64 than the default 64-bit build.
+- Scripts ship as source in the `.wb64` and are compiled on the console when a scene loads, at
+  about 5–8 ms per KB of source on N64 and DS (a 20 KB experience: 0.1–0.2 s). Lua bytecode is
+  never loaded from files: it isn't portable and the VM doesn't verify it. Caching compiled
+  scripts isn't needed at that speed.
 - **Server scripts** run the world on the host; **client scripts** run one player's UI, camera,
   sound and effects. Client scripts can't change the world directly; they send requests the
   server scripts accept or reject.
@@ -150,7 +152,15 @@ Lua controls the world. *Decided.*
   - time as session ticks, with no `os.time`;
   - no `io`, `os`, `debug`, `load` of bytecode, or other ways out of the sandbox.
 - **Limits.** *Proposed:* each script context has a memory cap and an instruction budget per tick,
-  counted rather than timed, calibrated so the slowest CPU (DS, 67 MHz, no FPU) keeps up.
+  counted rather than timed: **8,000 Lua instructions per tick**, about 10 ms (30% of a tick) on
+  DS, the slowest CPU (§16).
+- **Lua decides; the engine loops.** *Proposed, from §16:* the consoles run roughly 600–1,500 Lua
+  instructions per millisecond, so per-object, per-tick work belongs in engine functions written
+  in C, with Lua setting them up and reacting to their results:
+  - part velocity, tweens and animation playback, instead of moving parts in Lua every tick;
+  - overlap, region and raycast queries, instead of Lua loops over parts;
+  - timers and events fired by the engine;
+  - text formatting for UI (`string.format` costs about 0.2 ms per call on N64 and DS).
 - The API is versioned (§12) and only grows: old experiences keep working.
 
 ## 8. Input
@@ -355,7 +365,7 @@ DS and N64 hardware before they're fixed:
 | Texture size | N64 texture memory (4 KB) | ≤ 64×64, 32×32 typical |
 | Texture memory | DS texture VRAM | ~128 KB canonical |
 | RAM for the experience | DS 4 MB, N64 4 MB (no Expansion Pak required), minus engine and Lua | ~1 MB, enforced by the Lua memory cap |
-| Script work | DS CPU | N instructions per tick, calibrated on DS |
+| Script work | DS CPU | 8,000 Lua instructions per tick (~10 ms on DS) |
 | Parts | collision and draw cost | 256 (prototype value) |
 | Collision shapes per model | collision cost | ~8 |
 | Audio | DS channels, N64 software mixing | ~8 voices |
@@ -465,14 +475,52 @@ screen, and DS/3DS touch can tap its keys.
 | Native system keyboards | Not used, to keep one look. |
 | Skeletal animation, dynamic lighting | Out of scope. |
 
+## 16. Measurements
+
+### Lua 5.4 on N64 and DS
+
+Measured with `bench/lua` (`make bench-n64`, `make bench-nds`) in ares v148 and melonDS 1.1, on
+2026-10-13. Emulator timing is close to hardware but not exact; the ROMs are in `bench/lua` to
+confirm on hardware. Each workload runs for 30 ticks; "instr" counts Lua VM instructions only,
+not work done inside C functions such as `string.format`.
+
+| Per tick | N64, 64-bit | N64, 32-bit | DS, 64-bit | DS, 32-bit |
+|---|---|---|---|---|
+| 64 parts moved (1,476 instr) | 1.25 ms | 1.01 ms | 1.93 ms | 1.87 ms |
+| 496 box-pair checks (7,770 instr) | 6.05 ms | 5.03 ms | 10.70 ms | 9.98 ms |
+| 200 event callbacks (2,880 instr) | 2.21 ms | 1.82 ms | 3.53 ms | 3.12 ms |
+| 10 formatted strings (150 instr) | 2.15 ms | 2.22 ms | 2.08 ms | 2.07 ms |
+| 50 short-lived tables (453 instr) | 4.35 ms | 3.30 ms | 4.19 ms | 3.99 ms |
+| All of the above (12,746 instr) | 16.8 ms (50%) | 14.4 ms (43%) | 22.8 ms (68%) | 21.5 ms (65%) |
+| Lua instructions per ms | 760–1,300 | 890–1,550 | 560–820 | 590–920 |
+
+| Memory and loading | N64, 64-bit | N64, 32-bit | DS, 64-bit | DS, 32-bit |
+|---|---|---|---|---|
+| New state with libraries | 10 KB, 5.3 ms | 8 KB, 4.2 ms | 10 KB, 4.9 ms | 8 KB, 5.0 ms |
+| Compile 2.3 KB of source | 19.2 ms, +8 KB | 18.7 ms, +7 KB | 12.7 ms, +8 KB | 12.5 ms, +7 KB |
+| After setup / peak | 29 / 59 KB | 23 / 49 KB | 29 / 59 KB | 23 / 49 KB |
+
+For reference, the same benchmark on a desktop PC runs 200,000–400,000 instructions per ms; the
+whole "all of the above" tick takes 0.05–0.06 ms.
+
+What it means:
+
+- **Lua fits.** Memory is tens of KB and compiling is fast enough to do on every load.
+- **CPU is the limit.** A busy experience written all in Lua would use half to two-thirds of a
+  30 Hz tick. Hence the 8,000-instruction budget and "Lua decides; the engine loops" (§7).
+- **32-bit Lua** is faster on N64 and uses about 20% less memory; on DS it's about 5% faster.
+- **Not tried yet**, per-port optimizations (§1.3): on DS, placing the VM's main loop
+  (`luaV_execute`) in the ARM9's fast instruction memory (ITCM) and comparing Thumb with ARM code;
+  tuning the garbage collector, which dominates the short-lived-table case.
+
 ## Open questions
 
-1. **Lua cost on N64 and DS:** measure compile time, memory and instructions per tick before
-   fixing the script budget and number types (§7, §13).
+1. **Lua on hardware:** confirm the §16 numbers on a real N64 and DS.
 
 Settled since the first draft: `.wb64`; 30 Hz tick; smooth animation with collision that follows
 it; rotation about the vertical axis only; the six-button virtual controller with combinations;
-script errors return to the hub; no Expansion Pak (N64 budgets assume 4 MB); networking deferred.
+script errors return to the hub; no Expansion Pak (N64 budgets assume 4 MB); networking deferred;
+Lua's cost measured (§16).
 
 ## Current prototype vs this spec
 
@@ -488,12 +536,13 @@ What hangout64 already has, and what changes:
 | Rendering | Each `main.c` draws the level itself | Core draw list; ports render it their own way |
 | Timing | One update per vsync on consoles, fixed 60 Hz on PC | Fixed 30 Hz tick everywhere |
 | Avatar | 412-triangle guy, tinted coat, run hop | Count it against the budget; customisation as data |
-| Scripting, UI, audio, networking, saves | None | §7, §14, §9.4, §10, §11.4 |
+| Scripting | Lua 5.4.9 vendored in `third_party/lua`, measured by `bench/lua`; not in the game yet | §7 |
+| UI, audio, networking, saves | None | §14, §9.4, §10, §11.4 |
 
 Suggested order of work:
 
 1. Fixed tick everywhere, and a headless core with replay and state-hash tests.
-2. Lua on N64 and DS: measure cost; settle the script budget and number types.
+2. ~~Lua on N64 and DS: measure cost; settle the script budget and number types.~~ Done (§16).
 3. The draw list and platform layer, starting with PC, then N64.
 4. `.wb64` with sessions and scenes, replacing the place file.
 5. Parts: baseplate, wedges, 45° rotation and collision.

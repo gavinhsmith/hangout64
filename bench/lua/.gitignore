@@ -2,7 +2,8 @@ bench_lua.h
 build/
 luabench32
 luabench64
-*.exe
-*.z64
-*.nds
-*.elf
+luabench*.exe
+luabench*.z64
+luabench*.nds
+luabench*.elf
+!Makefile.nds

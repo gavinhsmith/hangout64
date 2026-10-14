@@ -29,7 +29,7 @@ LIBS   := -L$(LIBOGC_LIB) $(if $(filter wii,$(PLATFORM)),-lwiiuse -lbte) -logc -
 
 $(TARGET).dol: $(BUILD)/$(TARGET).elf
 	elf2dol $< $@
-	python3 dolpad.py $@
+	$(PYTHON) $(ROOT)/tools/dolpad.py $@
 
 $(BUILD)/$(TARGET).elf: $(OBJS)
 	$(CC) $(MACHDEP) $^ $(LIBS) -o $@

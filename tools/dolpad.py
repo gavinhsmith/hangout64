@@ -1,7 +1,7 @@
 """Pad every DOL section to a multiple of 32 bytes, in place.
 
 elf2dol keeps section sizes as-is; Dolphin refuses unaligned ones
-("Failed to init core"). Usage: python3 dolpad.py file.dol
+("Failed to init core"). Usage: python3 tools/dolpad.py file.dol
 """
 import struct
 import sys

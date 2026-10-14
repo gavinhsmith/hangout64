@@ -4,7 +4,7 @@ The model is turned Y-up with its front facing -Z, centred on X/Z, feet at y = 0
 scaled to `height` units. Positions and texture coordinates are 8.8 fixed point (256 = 1
 unit, or the full texture). Each triangle gets `rgb` shaded by how much it faces a fixed
 light, so the shape reads without runtime lighting. Faces in the group "hidden" are skipped
-(see guy_uvs.py).
+(see authoring/guy_uvs.py).
 """
 
 LIGHT = (0.4, 0.8, 0.45)  # roughly from above, front-right

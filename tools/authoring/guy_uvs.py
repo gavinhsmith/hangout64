@@ -17,7 +17,7 @@ OwlCAD exports the guy without UVs, so this works them out per body part:
 The model's winding must be counter-clockwise from outside (OwlCAD's is). Re-run this
 after re-exporting the model:
 
-    python3 tools/guy_uvs.py assets/model/guy.obj
+    python3 tools/authoring/guy_uvs.py assets/model/guy.obj
 
 Atlas regions are in pixels, inclusive, in the 16x16 atlas.
 """

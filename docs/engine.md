@@ -479,9 +479,9 @@ screen, and DS/3DS touch can tap its keys.
 
 ### Lua 5.4 on N64 and DS
 
-Measured with `bench/lua` (`make bench-n64`, `make bench-nds`) in ares v148 and melonDS 1.1, on
-2026-10-13. Emulator timing is close to hardware but not exact; the ROMs are in `bench/lua` to
-confirm on hardware. Each workload runs for 30 ticks; "instr" counts Lua VM instructions only,
+Measured with a one-off benchmark ROM (`bench/lua`, last present in commit fe0db4a) in ares v148
+and melonDS 1.1, on 2026-10-13. Emulator timing is close to hardware but not exact; check out
+that commit to rebuild the ROMs for hardware. Each workload runs for 30 ticks; "instr" counts Lua VM instructions only,
 not work done inside C functions such as `string.format`.
 
 | Per tick | N64, 64-bit | N64, 32-bit | DS, 64-bit | DS, 32-bit |
@@ -536,7 +536,7 @@ What hangout64 already has, and what changes:
 | Rendering | Each `main.c` draws the level itself | Core draw list; ports render it their own way |
 | Timing | Fixed 30 Hz tick on every platform (`ticker_due` in the core); drawn at display rate without interpolation | Keep; interpolate where a port can afford it |
 | Avatar | 412-triangle guy, tinted coat, run hop | Count it against the budget; customisation as data |
-| Scripting | Lua 5.4.9 as a submodule in `third_party/lua`, measured by `bench/lua`; not in the game yet | §7 |
+| Scripting | Lua 5.4.9 as a submodule in `third_party/lua`, measured in §16; not in the game yet | §7 |
 | UI, audio, networking, saves | None | §14, §9.4, §10, §11.4 |
 
 Suggested order of work:

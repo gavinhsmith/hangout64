@@ -20,15 +20,15 @@ test:
 	$(MAKE) -C core test
 
 pc:
-	cmake -S pc -B build/pc
+	cmake -S platform/pc -B build/pc
 	cmake --build build/pc
 
 $(CONSOLES):
-	docker run --rm $(DOCKER_ARGS_$@) -v "$(CURDIR):/src" -w /src/$@ $(IMAGE_$@) make
+	docker run --rm $(DOCKER_ARGS_$@) -v "$(CURDIR):/src" -w /src/platform/$@ $(IMAGE_$@) make
 
 clean:
 	rm -rf build core/test_core
-	$(foreach c,$(CONSOLES),docker run --rm $(DOCKER_ARGS_$(c)) -v "$(CURDIR):/src" -w /src/$(c) $(IMAGE_$(c)) make clean;)
+	$(foreach c,$(CONSOLES),docker run --rm $(DOCKER_ARGS_$(c)) -v "$(CURDIR):/src" -w /src/platform/$(c) $(IMAGE_$(c)) make clean;)
 
 # Lua benchmark ROMs (bench/lua): measure Lua's cost on the slowest consoles.
 bench-n64:

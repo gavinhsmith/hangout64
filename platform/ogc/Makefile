@@ -17,11 +17,12 @@ clean:
 else
 
 include $(DEVKITPPC)/$(PLATFORM)_rules
+include ../../core/core.mk
 
 TARGET := hangout64_$(PLATFORM)
 BUILD  := build/$(PLATFORM)
-OBJS   := $(BUILD)/main.o $(BUILD)/world.o $(BUILD)/place.o $(BUILD)/guy_mesh.o $(BUILD)/default_place.o
-CFLAGS := -O2 -Wall $(MACHDEP) -I$(LIBOGC_INC) -I../core -MMD -MP
+OBJS   := $(BUILD)/main.o $(addprefix $(BUILD)/,$(CORE_SRC:.c=.o))
+CFLAGS := -O2 -Wall $(MACHDEP) -I$(LIBOGC_INC) -I$(CORE) -MMD -MP
 LIBS   := -L$(LIBOGC_LIB) $(if $(filter wii,$(PLATFORM)),-lwiiuse -lbte) -logc -lm
 
 .DEFAULT_GOAL := $(TARGET).dol
@@ -36,7 +37,7 @@ $(BUILD)/$(TARGET).elf: $(OBJS)
 $(BUILD)/%.o: %.c | $(BUILD)
 	$(CC) $(CFLAGS) -c $< -o $@
 
-$(BUILD)/%.o: ../core/%.c | $(BUILD)
+$(BUILD)/%.o: $(CORE)/%.c | $(BUILD)
 	$(CC) $(CFLAGS) -c $< -o $@
 
 $(BUILD):

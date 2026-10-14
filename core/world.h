@@ -85,7 +85,7 @@ enum {
 int place_load(place *pl, const uint8_t *data, size_t size);
 void place_free(place *pl);
 
-/* The built-in place, generated from assets/places/course.json. */
+/* The built-in place, generated from assets/scene/course.json. */
 extern const uint8_t default_place[];
 extern const unsigned default_place_size;
 

@@ -3,12 +3,13 @@ $(error DEVKITARM is not set; use the devkitpro/devkitarm container)
 endif
 
 include $(DEVKITARM)/3ds_rules
+include ../../core/core.mk
 
 TARGET  := hangout64
 BUILD   := build
-OBJS    := $(BUILD)/vshader.shbin.o $(BUILD)/main.o $(BUILD)/world.o $(BUILD)/place.o $(BUILD)/guy_mesh.o $(BUILD)/default_place.o
+OBJS    := $(BUILD)/vshader.shbin.o $(BUILD)/main.o $(addprefix $(BUILD)/,$(CORE_SRC:.c=.o))
 ARCH    := -march=armv6k -mtune=mpcore -mfloat-abi=hard -mtp=soft
-CFLAGS  := -O2 -Wall $(ARCH) -D__3DS__ -I$(CTRULIB)/include -I../core -MMD -MP -I$(BUILD)
+CFLAGS  := -O2 -Wall $(ARCH) -D__3DS__ -I$(CTRULIB)/include -I$(CORE) -MMD -MP -I$(BUILD)
 LDFLAGS := -specs=3dsx.specs $(ARCH)
 LIBS    := -L$(CTRULIB)/lib -lcitro3d -lctru -lm
 
@@ -33,7 +34,7 @@ $(BUILD)/main.o: $(BUILD)/vshader.shbin.o
 $(BUILD)/%.o: %.c | $(BUILD)
 	$(CC) $(CFLAGS) -c $< -o $@
 
-$(BUILD)/%.o: ../core/%.c | $(BUILD)
+$(BUILD)/%.o: $(CORE)/%.c | $(BUILD)
 	$(CC) $(CFLAGS) -c $< -o $@
 
 $(BUILD):

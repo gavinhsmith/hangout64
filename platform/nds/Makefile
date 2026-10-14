@@ -11,12 +11,13 @@ GAME_SUBTITLE2 := github.com/gavinhsmith/hangout64
 LIBPATHS := -L$(DEVKITPRO)/libnds/lib
 
 include $(DEVKITARM)/ds_rules
+include ../../core/core.mk
 
 TARGET  := hangout64
 BUILD   := build
-OBJS    := $(BUILD)/main.o $(BUILD)/world.o $(BUILD)/place.o $(BUILD)/guy_mesh.o $(BUILD)/default_place.o
+OBJS    := $(BUILD)/main.o $(addprefix $(BUILD)/,$(CORE_SRC:.c=.o))
 ARCH    := -march=armv5te -mtune=arm946e-s
-CFLAGS  := -O2 -Wall $(ARCH) -DARM9 $(_EXTRADEFS) -I$(LIBNDS)/include -I../core -MMD -MP
+CFLAGS  := -O2 -Wall $(ARCH) -DARM9 $(_EXTRADEFS) -I$(LIBNDS)/include -I$(CORE) -MMD -MP
 # ds_rules' %.elf rule links these, adding calico's specs and runtime.
 LD       := $(CC)
 OFILES   := $(OBJS)
@@ -32,7 +33,7 @@ $(TARGET).elf: $(OBJS)
 $(BUILD)/%.o: %.c | $(BUILD)
 	$(CC) $(CFLAGS) -c $< -o $@
 
-$(BUILD)/%.o: ../core/%.c | $(BUILD)
+$(BUILD)/%.o: $(CORE)/%.c | $(BUILD)
 	$(CC) $(CFLAGS) -c $< -o $@
 
 $(BUILD):

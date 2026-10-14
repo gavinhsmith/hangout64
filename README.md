@@ -9,11 +9,11 @@ This is the prototype for **workbench64**, a small Roblox-like platform; see the
 | Folder | Platform | Library | Output |
 |---|---|---|---|
 | `core/` | shared game code (no platform headers) | — | — |
-| `n64/` | Nintendo 64 | libdragon (preview, OpenGL) | `.z64` |
-| `ogc/` | GameCube + Wii | libogc (GX) | `.dol` ×2 |
-| `nds/` | DS | libnds | `.nds` |
-| `3ds/` | 3DS | libctru + citro3d | `.3dsx` |
-| `pc/` | Windows / Linux / macOS | SDL3 + OpenGL | executable |
+| `platform/n64/` | Nintendo 64 | libdragon (preview, OpenGL) | `.z64` |
+| `platform/ogc/` | GameCube + Wii | libogc (GX) | `.dol` ×2 |
+| `platform/nds/` | DS | libnds | `.nds` |
+| `platform/3ds/` | 3DS | libctru + citro3d | `.3dsx` |
+| `platform/pc/` | Windows / Linux / macOS | SDL3 + OpenGL | executable |
 
 ## Controls
 
@@ -63,11 +63,11 @@ make bench-nds  # (Lua is a submodule: git submodule update --init)
 A place is the content of one game: parts (boxes, optionally drawn with a custom model), the
 models they use, and the models' textures. Places are data, loaded and validated at runtime by `core/place.c`,
 so they can be delivered over the network later. The built-in place is
-`assets/places/course.json`, packed into `core/default_place.c`:
+`assets/scene/course.json`, packed into `core/default_place.c`:
 
 ```sh
-python3 tools/placec.py assets/places/course.json core/default_place.c default_place
-python3 tools/placec.py assets/places/course.json course.place   # the same, as a binary file
+python3 tools/placec.py assets/scene/course.json core/default_place.c default_place
+python3 tools/placec.py assets/scene/course.json course.place   # the same, as a binary file
 ```
 
 The format is described at the top of `tools/placec.py`. Budgets (parts, meshes, textures,

@@ -38,6 +38,10 @@ keeping 4:3.
 
 ## Building
 
+Every build needs Python 3 (standard library only): the built-in models, textures and place
+are generated into `build/gen` from `assets/`. On Windows, where `python3` may be the Store stub,
+pass `PYTHON=python` to make.
+
 ```sh
 make test   # core unit tests (host compiler)
 make pc     # needs CMake + SDL3
@@ -61,20 +65,18 @@ make n64-reset  # drop the cached N64 toolchain + libdragon volume (e.g. after a
 A place is the content of one game: parts (boxes, optionally drawn with a custom model), the
 models they use, and the models' textures. Places are data, loaded and validated at runtime by `core/place.c`,
 so they can be delivered over the network later. The built-in place is
-`assets/scene/course.json`, packed into `core/default_place.c`:
+`assets/scene/course.json`, packed into C by the build. To pack one by hand:
 
 ```sh
-python3 tools/placec.py assets/scene/course.json core/default_place.c default_place
-python3 tools/placec.py assets/scene/course.json course.place   # the same, as a binary file
+python3 tools/placec.py assets/scene/course.json course.place   # binary
 ```
 
 The format is described at the top of `tools/placec.py`. Budgets (parts, meshes, textures,
 triangles) are in `core/world.h` and are sized for the weakest console. Textures are PNGs with
 at most 16 colours, up to 32 px per side (32x32 fits the N64's texture memory), padded to a
-power of two if needed; they are drawn nearest-filtered and tinted by the model's colour. `placec.py` needs Pillow
-(`pip install pillow`).
+power of two if needed; they are drawn nearest-filtered and tinted by the model's colour.
 
-Engine assets (like the avatar) are compiled in instead, with `tools/obj2c.py`. The avatar's
+Engine assets (like the avatar) are compiled in instead, with `tools/obj2c.py` (also run by the build). The avatar's
 texture is the atlas `assets/texture/guy_base.png` with `guy_coat.png` layered on top; the
 coat's greys are tinted with each player's coat colour at runtime by swapping palette
 entries. `tools/guy_uvs.py` maps the atlas onto the model, stretching each face's region to fit it
@@ -83,7 +85,6 @@ arm ends. Run it on a fresh export of `guy.obj` (it rewrites the file and refuse
 
 ```sh
 python3 tools/guy_uvs.py assets/model/guy.obj
-python3 tools/obj2c.py assets/model/guy.obj guy_mesh 255,255,255 assets/texture/guy_base.png guy_texture assets/texture/guy_coat.png > core/guy_mesh.c
 ```
 
 Models are OBJ files exported Z-up with the front facing -Y (as from OwlCAD).

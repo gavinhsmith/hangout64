@@ -7,7 +7,7 @@ include ../../core/core.mk
 
 TARGET  := hangout64
 BUILD   := build
-OBJS    := $(BUILD)/vshader.shbin.o $(BUILD)/main.o $(addprefix $(BUILD)/,$(CORE_SRC:.c=.o))
+OBJS    := $(BUILD)/vshader.shbin.o $(BUILD)/main.o $(addprefix $(BUILD)/,$(CORE_OBJ))
 ARCH    := -march=armv6k -mtune=mpcore -mfloat-abi=hard -mtp=soft
 CFLAGS  := -O2 -Wall $(ARCH) -D__3DS__ -I$(CTRULIB)/include -I$(CORE) -MMD -MP -I$(BUILD)
 LDFLAGS := -specs=3dsx.specs $(ARCH)
@@ -35,6 +35,9 @@ $(BUILD)/%.o: %.c | $(BUILD)
 	$(CC) $(CFLAGS) -c $< -o $@
 
 $(BUILD)/%.o: $(CORE)/%.c | $(BUILD)
+	$(CC) $(CFLAGS) -c $< -o $@
+
+$(BUILD)/%.o: $(GEN)/%.c | $(BUILD)
 	$(CC) $(CFLAGS) -c $< -o $@
 
 $(BUILD):

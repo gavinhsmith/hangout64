@@ -1,8 +1,8 @@
 """Pack a place (JSON + OBJ models + PNG textures) into the binary place format core/place.c
-loads. Needs Pillow (pip install pillow) for reading PNGs.
+loads.
 
     python3 tools/placec.py assets/scene/course.json course.place       # binary
-    python3 tools/placec.py assets/scene/course.json core/default_place.c default_place
+    python3 tools/placec.py assets/scene/course.json build/gen/default_place.c default_place
 
 Format (all little-endian; see core/world.h):
     "HG64"  u16 version (2)

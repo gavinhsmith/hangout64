@@ -9,8 +9,11 @@ all: hangout64.z64
 $(BUILD_DIR)/core/%.o: $(CORE)/%.c
 	@mkdir -p $(dir $@)
 	$(N64_CC) -c $(CFLAGS) -o $@ $<
+$(BUILD_DIR)/core/%.o: $(GEN)/%.c
+	@mkdir -p $(dir $@)
+	$(N64_CC) -c $(CFLAGS) -o $@ $<
 
-$(BUILD_DIR)/hangout64.elf: $(BUILD_DIR)/main.o $(addprefix $(BUILD_DIR)/core/,$(CORE_SRC:.c=.o))
+$(BUILD_DIR)/hangout64.elf: $(BUILD_DIR)/main.o $(addprefix $(BUILD_DIR)/core/,$(CORE_OBJ))
 hangout64.z64: N64_ROM_TITLE = "hangout64"
 
 # The libdragon image ships only the toolchain. If libdragon isn't installed yet,
